@@ -20,8 +20,8 @@ namespace SplatterVault.MST
                 serverCode = session.code,
                 serverName = session.friendlyName ?? session.serverName,
                 ipAddress = session.slaveIp,
-                port = 7777, // Default game port
-                maxPlayers = 20, // Configure based on your game
+                port = 8100, // Default game port
+                maxPlayers = 10, // Configure based on your game
                 gameType = session.gameType,
                 mode = session.mode,
                 isPublic = session.isPublic,

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -19,8 +20,7 @@ namespace SplatterVault
         /// Initialize the SplatterVault client
         /// </summary>
         /// <param name="apiKey">Your SplatterVault API key (sv_...)</param>
-        /// <param name="baseUrl">API base URL (default: https://api.splattervault.com/rest)</param>
-        public SplatterVaultClient(string apiKey, string baseUrl = "https://api.splattervault.com/rest")
+        public SplatterVaultClient(string apiKey, string baseUrl = "https://splattervault.com/rest")
         {
             if (string.IsNullOrEmpty(apiKey))
                 throw new ArgumentException("API key is required");
@@ -41,7 +41,7 @@ namespace SplatterVault
         {
             try
             {
-                string json = JsonUtility.ToJson(request);
+                string json = JsonConvert.SerializeObject(request);
                 string response = await PostAsync("/credits/sessions", json);
                 GameSession session = ParseResponse<GameSession>(response);
                 onSuccess?.Invoke(session);
