@@ -20,7 +20,7 @@ namespace SplatterVault.MST
                 serverCode = session.code,
                 serverName = session.friendlyName ?? session.serverName,
                 ipAddress = session.slaveIp,
-                port = 8100, // Default game port
+                port = session.GetServerPort(),
                 maxPlayers = 10, // Configure based on your game
                 gameType = session.gameType,
                 mode = session.mode,
@@ -110,12 +110,12 @@ namespace SplatterVault.MST
         /// <summary>
         /// Get connection string for MST clients
         /// </summary>
-        public static string GetConnectionString(this GameSession session, int port = 7777)
+        public static string GetConnectionString(this GameSession session)
         {
             if (string.IsNullOrEmpty(session.slaveIp))
                 return null;
 
-            return $"{session.slaveIp}:{port}";
+            return $"{session.slaveIp}:{session.GetServerPort()}";
         }
     }
 

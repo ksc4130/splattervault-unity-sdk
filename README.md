@@ -191,6 +191,53 @@ else
 }
 ```
 
+### Example 5: Using Custom Game Type Configurations
+
+```csharp
+// Create a session with a custom game type configuration
+var request = new CreateSessionRequest();
+request.SetRegion(Region.NYC3);
+
+// Use your custom game type config key (obtained from dashboard)
+request.SetGameTypeConfigKey("usr_123_abc456xyz");
+
+// Set custom variables defined in your game type config
+request.AddCustomVariable("MAP_NAME", "desert_arena");
+request.AddCustomVariable("MAX_ROUNDS", 10);
+request.AddCustomVariable("DIFFICULTY", "hard");
+
+request.isPublic = true;
+request.friendlyName = "Custom Map Tournament";
+
+await client.CreateCreditSessionAsync(request,
+    onSuccess: (session) => {
+        Debug.Log($"Custom session created! Join code: {session.code}");
+    }
+);
+```
+
+### Example 6: Custom Variables with Dictionary
+
+```csharp
+var request = new CreateSessionRequest();
+request.SetGameTypeConfigKey("usr_123_abc456xyz");
+
+// Set multiple variables at once
+var variables = new Dictionary<string, object>
+{
+    { "MAP_NAME", "forest_battle" },
+    { "GAME_MODE", "capture_the_flag" },
+    { "TIME_LIMIT", 1800 }, // 30 minutes in seconds
+    { "FRIENDLY_FIRE", false }
+};
+
+request.SetCustomVariables(variables);
+request.SetRegion(Region.NYC3);
+request.isPublic = false;
+
+await client.CreateSubscriptionSessionAsync(request);
+```
+
 ## Models
 
 ### CreateSessionRequest
@@ -204,6 +251,16 @@ public class CreateSessionRequest
     public string friendlyName;        // Optional custom name
     public DateTime? scheduledStartTime; // Optional scheduled start
     public DateTime? scheduledEndTime;   // Optional auto-stop time
+    
+    // Custom Game Type Configuration Support (NEW)
+    public string gameTypeConfigKey;   // Optional: unique key for custom game type
+    public Dictionary<string, object> customVariables; // Optional: custom variable values
+    
+    // Helper Methods
+    void SetGameTypeConfigKey(string configKey);
+    void AddCustomVariable(string name, object value);
+    void SetCustomVariables(Dictionary<string, object> variables);
+    void ClearCustomVariables();
 }
 ```
 
@@ -234,6 +291,59 @@ public class CreditBalance
     public int totalPurchased;
     public int totalUsed;
 }
+```
+
+## Custom Game Type Configurations
+
+The SDK now supports custom game type configurations, allowing you to define your own game types with custom variables that can be used in server launch arguments, environment variables, and configuration files.
+
+### Getting Started with Custom Configurations
+
+1. **Request Access**: Use the dashboard to request permission to create custom game types
+2. **Create Configuration**: Once approved, create your custom game type with variables
+3. **Get Unique Key**: Copy your unique game type config key (e.g., `usr_123_abc456xyz`)
+4. **Use in SDK**: Pass the key and variable values when creating sessions
+
+### Custom Variables
+
+Custom variables allow you to parameterize your server configurations. Common use cases:
+
+- **Map Selection**: Let users choose which map to load
+- **Game Modes**: Define custom game mode variations
+- **Server Settings**: Control difficulty, time limits, player counts, etc.
+- **Feature Flags**: Enable/disable specific features
+
+### Example: Map Selection System
+
+```csharp
+// Your custom game type config defines these variables:
+// - MAP_NAME (select): "Desert Arena", "Forest Battle", "Urban Combat"
+// - MAX_PLAYERS (number): 8-32
+// - FRIENDLY_FIRE (boolean): true/false
+
+var request = new CreateSessionRequest();
+request.SetGameTypeConfigKey("usr_123_abc456xyz");
+
+// User selects options in your UI
+request.AddCustomVariable("MAP_NAME", selectedMap);
+request.AddCustomVariable("MAX_PLAYERS", playerCount);
+request.AddCustomVariable("FRIENDLY_FIRE", friendlyFireEnabled);
+
+await client.CreateCreditSessionAsync(request);
+```
+
+### Backward Compatibility
+
+The new custom configuration fields are completely optional. Existing code continues to work:
+
+```csharp
+// Legacy approach - still works!
+var request = new CreateSessionRequest
+{
+    gameType = "PaintballPlayground",
+    mode = "XBall",
+    region = "NYC3"
+};
 ```
 
 ## Best Practices

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace SplatterVault
 {
@@ -19,9 +20,12 @@ namespace SplatterVault
     /// </summary>
     public enum Region
     {
-        NYC3,   // New York
+        NYC1,   // New York 1
+        NYC3,   // New York 3
         TOR1,   // Toronto
-        SFO1,   // San Francisco
+        SFO1,   // San Francisco 1
+        SFO2,   // San Francisco 2
+        SFO3,   // San Francisco 3
         LON1    // London
     }
 
@@ -102,6 +106,11 @@ namespace SplatterVault
         public string friendlyName;
         public string scheduledStartTime; // ISO 8601 format
         public string scheduledEndTime;   // ISO 8601 format
+        public int? serverSizeId;         // Optional: server size ID (defaults per game type)
+
+        // Fields for custom game type configurations
+        public string gameTypeConfigKey;  // Optional: unique key for custom game type config
+        public Dictionary<string, object> customVariables; // Optional: custom variable values
 
         /// <summary>
         /// Set the region using strongly-typed enum
@@ -166,6 +175,44 @@ namespace SplatterVault
         {
             scheduledEndTime = dateTime.ToUniversalTime().ToString("o");
         }
+
+        /// <summary>
+        /// Set the game type config key for custom configurations
+        /// </summary>
+        /// <param name="configKey">Unique key from custom game type (e.g., "usr_123_abc456xyz")</param>
+        public void SetGameTypeConfigKey(string configKey)
+        {
+            gameTypeConfigKey = configKey;
+        }
+
+        /// <summary>
+        /// Add a custom variable value
+        /// </summary>
+        /// <param name="name">Variable name (e.g., "MAP_NAME")</param>
+        /// <param name="value">Variable value</param>
+        public void AddCustomVariable(string name, object value)
+        {
+            if (customVariables == null)
+                customVariables = new Dictionary<string, object>();
+            customVariables[name] = value;
+        }
+
+        /// <summary>
+        /// Set multiple custom variables at once
+        /// </summary>
+        /// <param name="variables">Dictionary of variable names and values</param>
+        public void SetCustomVariables(Dictionary<string, object> variables)
+        {
+            customVariables = variables;
+        }
+
+        /// <summary>
+        /// Clear all custom variables
+        /// </summary>
+        public void ClearCustomVariables()
+        {
+            customVariables = null;
+        }
     }
 
     /// <summary>
@@ -177,6 +224,7 @@ namespace SplatterVault
         public int id;
         public string code;
         public string serverName;
+        public string hostname;
         public string friendlyName;
         public string status;
         public string gameType;
@@ -186,9 +234,20 @@ namespace SplatterVault
         public string scheduledStartTime;
         public string scheduledEndTime;
         public string serverStart;
+        public string serverStoppedAt;
         public string slaveIp;
+        public int? slavePort;
         public int createdById;
-        public string serverType; // "Credit" or "Subscription"
+        public string serverType; // "Credit", "Subscription", etc.
+        public int serverSizeId;
+        public int? buildId;
+        public int? volumeId;
+        public bool creditsDeducted;
+
+        /// <summary>
+        /// Server size details (populated when API includes the relation)
+        /// </summary>
+        public ServerSizeInfo serverSize;
 
         /// <summary>
         /// Gets the scheduled start time as DateTime (if set)
@@ -213,8 +272,10 @@ namespace SplatterVault
         /// <summary>
         /// Gets the server start time as DateTime
         /// </summary>
-        public DateTime GetServerStartTime()
+        public DateTime? GetServerStartTime()
         {
+            if (string.IsNullOrEmpty(serverStart))
+                return null;
             return DateTime.Parse(serverStart);
         }
 
@@ -227,12 +288,58 @@ namespace SplatterVault
         }
 
         /// <summary>
+        /// Check if the session is pending (droplet provisioning)
+        /// </summary>
+        public bool IsPending()
+        {
+            return status == "Pending";
+        }
+
+        /// <summary>
         /// Check if the session is scheduled for future start
         /// </summary>
         public bool IsScheduled()
         {
             return status == "Scheduled";
         }
+
+        /// <summary>
+        /// Check if the session has stopped
+        /// </summary>
+        public bool IsStopped()
+        {
+            return status == "Not Active";
+        }
+
+        /// <summary>
+        /// Get the game server port (defaults to 8100 if not set)
+        /// </summary>
+        public int GetServerPort()
+        {
+            return slavePort ?? 8100;
+        }
+    }
+
+    /// <summary>
+    /// Server size info returned as a nested object on session responses
+    /// </summary>
+    [Serializable]
+    public class ServerSizeInfo
+    {
+        public int id;
+        public string friendlyName;
+        public float creditsPerMinute;
+    }
+
+    /// <summary>
+    /// Result from stopping a credit-based session
+    /// </summary>
+    [Serializable]
+    public class StopSessionResult
+    {
+        public GameSession session;
+        public float totalHours;
+        public float totalCost;
     }
 
     /// <summary>
@@ -242,26 +349,45 @@ namespace SplatterVault
     public class CreditBalance
     {
         public int id;
-        public int balance;
-        public int totalPurchased;
-        public int totalUsed;
+        public float balance;
+        public float subscriptionBalance;
+        public float adHocBalance;
+        public bool subscriptionCreditsFrozen;
+        public bool isInGracePeriod;
+        public float totalPurchased;
+        public float totalUsed;
         public bool alertsEnabled;
-        public int alertThreshold;
+        public float alertThreshold;
+        public string lastAlertSent;
+        public string createdAt;
+        public string updatedAt;
 
         /// <summary>
-        /// Gets the balance as hours (60 credits = 1 hour)
+        /// Gets the total available balance (respects frozen subscription credits)
         /// </summary>
-        public float GetBalanceInHours()
+        public float GetAvailableBalance()
         {
-            return balance / 60f;
+            if (subscriptionCreditsFrozen)
+                return adHocBalance;
+            return subscriptionBalance + adHocBalance;
         }
 
         /// <summary>
-        /// Check if there are enough credits for a given duration
+        /// Gets the balance as hours based on a given credits-per-minute rate
         /// </summary>
-        public bool HasEnoughCredits(int minutes)
+        public float GetBalanceInHours(float creditsPerMinute)
         {
-            return balance >= minutes;
+            if (creditsPerMinute <= 0)
+                return 0;
+            return GetAvailableBalance() / creditsPerMinute / 60f;
+        }
+
+        /// <summary>
+        /// Check if there are enough credits for a given duration at a given rate
+        /// </summary>
+        public bool HasEnoughCredits(float minutes, float creditsPerMinute)
+        {
+            return GetAvailableBalance() >= minutes * creditsPerMinute;
         }
     }
 
@@ -271,11 +397,14 @@ namespace SplatterVault
     [Serializable]
     public class CreditStats
     {
-        public int balance;
-        public int totalPurchased;
-        public int totalUsed;
-        public int monthlyUsage;
+        public float balance;
+        public float subscriptionBalance;
+        public float adHocBalance;
+        public bool subscriptionCreditsFrozen;
         public bool canStartSession;
+        public float totalPurchased;
+        public float totalUsed;
+        public float monthlyUsage;
         public List<CreditTransaction> recentTransactions;
     }
 
@@ -286,7 +415,7 @@ namespace SplatterVault
     public class CreditTransaction
     {
         public int id;
-        public int amount;
+        public float amount;
         public string type;
         public string description;
         public string createdAt;
@@ -329,6 +458,7 @@ namespace SplatterVault
         public string periodStart;
         public string periodEnd;
         public int monthlyCredits;
+        public int currentInstances;
     }
 
     /// <summary>
@@ -339,8 +469,8 @@ namespace SplatterVault
     {
         public int currentInstances;
         public int maxInstances;
-        public int creditBalance;
-        public int creditHours;
+        public float creditBalance;
+        public float creditHours;
         public int monthlyCredits;
         public int totalSessions;
         public int activeSessionsThisMonth;

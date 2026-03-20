@@ -41,9 +41,9 @@ namespace SplatterVault
         {
             try
             {
-                string json = JsonConvert.SerializeObject(request);
+                string json = JsonConvert.SerializeObject(request, SerializerSettings);
                 string response = await PostAsync("/credits/sessions", json);
-                GameSession session = ParseResponse<GameSession>(response);
+                GameSession session = Deserialize<GameSession>(response);
                 onSuccess?.Invoke(session);
                 return session;
             }
@@ -64,9 +64,9 @@ namespace SplatterVault
         {
             try
             {
-                string json = JsonUtility.ToJson(request);
+                string json = JsonConvert.SerializeObject(request, SerializerSettings);
                 string response = await PostAsync("/subscriptions/sessions", json);
-                GameSession session = ParseResponse<GameSession>(response);
+                GameSession session = Deserialize<GameSession>(response);
                 onSuccess?.Invoke(session);
                 return session;
             }
@@ -88,7 +88,7 @@ namespace SplatterVault
             try
             {
                 string response = await GetAsync($"/game-sessions/{sessionId}");
-                GameSession session = ParseResponse<GameSession>(response);
+                GameSession session = Deserialize<GameSession>(response);
                 onSuccess?.Invoke(session);
                 return session;
             }
@@ -109,7 +109,7 @@ namespace SplatterVault
             try
             {
                 string response = await GetAsync("/game-sessions/my-sessions");
-                List<GameSession> sessions = JsonHelper.FromJson<GameSession>(response);
+                List<GameSession> sessions = JsonConvert.DeserializeObject<List<GameSession>>(response, SerializerSettings);
                 onSuccess?.Invoke(sessions);
                 return sessions;
             }
@@ -121,18 +121,19 @@ namespace SplatterVault
         }
 
         /// <summary>
-        /// Stop an active game session
+        /// Stop a credit-based game session
         /// </summary>
-        public async Task<bool> StopSessionAsync(
+        public async Task<StopSessionResult> StopCreditSessionAsync(
             int sessionId,
-            Action<bool> onSuccess = null,
+            Action<StopSessionResult> onSuccess = null,
             Action<string> onError = null)
         {
             try
             {
-                await DeleteAsync($"/game-sessions/{sessionId}");
-                onSuccess?.Invoke(true);
-                return true;
+                string response = await PostAsync($"/credits/sessions/{sessionId}/stop", "{}");
+                StopSessionResult result = Deserialize<StopSessionResult>(response);
+                onSuccess?.Invoke(result);
+                return result;
             }
             catch (Exception ex)
             {
@@ -142,19 +143,17 @@ namespace SplatterVault
         }
 
         /// <summary>
-        /// Update the friendly name of a session
+        /// Stop a subscription-based game session
         /// </summary>
-        public async Task<GameSession> UpdateSessionFriendlyNameAsync(
+        public async Task<GameSession> StopSubscriptionSessionAsync(
             int sessionId,
-            string friendlyName,
             Action<GameSession> onSuccess = null,
             Action<string> onError = null)
         {
             try
             {
-                string json = $"{{\"friendlyName\":\"{friendlyName}\"}}";
-                string response = await PatchAsync($"/game-sessions/{sessionId}", json);
-                GameSession session = ParseResponse<GameSession>(response);
+                string response = await PostAsync($"/subscriptions/sessions/{sessionId}/stop", "{}");
+                GameSession session = Deserialize<GameSession>(response);
                 onSuccess?.Invoke(session);
                 return session;
             }
@@ -163,6 +162,95 @@ namespace SplatterVault
                 onError?.Invoke(ex.Message);
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Stop a game session, automatically routing to the correct endpoint based on serverType.
+        /// Requires the session's serverType to be known (fetch with GetSessionAsync first if needed).
+        /// </summary>
+        public async Task<StopSessionResult> StopSessionAsync(
+            GameSession session,
+            Action<StopSessionResult> onSuccess = null,
+            Action<string> onError = null)
+        {
+            if (session == null)
+                throw new ArgumentNullException(nameof(session));
+
+            if (session.serverType == "Subscription")
+            {
+                var stoppedSession = await StopSubscriptionSessionAsync(session.id, onError: onError);
+                var result = new StopSessionResult { session = stoppedSession };
+                onSuccess?.Invoke(result);
+                return result;
+            }
+
+            return await StopCreditSessionAsync(session.id, onSuccess, onError);
+        }
+
+        /// <summary>
+        /// Update the friendly name of a credit-based session
+        /// </summary>
+        public async Task<GameSession> UpdateCreditSessionFriendlyNameAsync(
+            int sessionId,
+            string friendlyName,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(new { friendlyName }, SerializerSettings);
+                string response = await PutAsync($"/credits/sessions/{sessionId}/friendly-name", json);
+                GameSession session = Deserialize<GameSession>(response);
+                onSuccess?.Invoke(session);
+                return session;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Update the friendly name of a subscription-based session
+        /// </summary>
+        public async Task<GameSession> UpdateSubscriptionSessionFriendlyNameAsync(
+            int sessionId,
+            string friendlyName,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(new { friendlyName }, SerializerSettings);
+                string response = await PutAsync($"/subscriptions/sessions/{sessionId}/friendly-name", json);
+                GameSession session = Deserialize<GameSession>(response);
+                onSuccess?.Invoke(session);
+                return session;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Update the friendly name of a session, automatically routing based on serverType.
+        /// </summary>
+        public async Task<GameSession> UpdateSessionFriendlyNameAsync(
+            GameSession session,
+            string friendlyName,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            if (session == null)
+                throw new ArgumentNullException(nameof(session));
+
+            if (session.serverType == "Subscription")
+                return await UpdateSubscriptionSessionFriendlyNameAsync(session.id, friendlyName, onSuccess, onError);
+
+            return await UpdateCreditSessionFriendlyNameAsync(session.id, friendlyName, onSuccess, onError);
         }
 
         #endregion
@@ -179,7 +267,7 @@ namespace SplatterVault
             try
             {
                 string response = await GetAsync("/credits");
-                CreditBalance balance = ParseResponse<CreditBalance>(response);
+                CreditBalance balance = Deserialize<CreditBalance>(response);
                 onSuccess?.Invoke(balance);
                 return balance;
             }
@@ -200,7 +288,7 @@ namespace SplatterVault
             try
             {
                 string response = await GetAsync("/credits/stats");
-                CreditStats stats = ParseResponse<CreditStats>(response);
+                CreditStats stats = Deserialize<CreditStats>(response);
                 onSuccess?.Invoke(stats);
                 return stats;
             }
@@ -225,8 +313,7 @@ namespace SplatterVault
             try
             {
                 string response = await GetAsync("/subscriptions");
-                var wrapper = JsonUtility.FromJson<SubscriptionWrapper>(response);
-                Subscription subscription = wrapper.current;
+                Subscription subscription = Deserialize<Subscription>(response);
                 onSuccess?.Invoke(subscription);
                 return subscription;
             }
@@ -247,7 +334,7 @@ namespace SplatterVault
             try
             {
                 string response = await GetAsync("/subscriptions/usage");
-                UsageStats stats = JsonUtility.FromJson<UsageStats>(response);
+                UsageStats stats = Deserialize<UsageStats>(response);
                 onSuccess?.Invoke(stats);
                 return stats;
             }
@@ -286,9 +373,9 @@ namespace SplatterVault
             }
         }
 
-        private async Task<string> PatchAsync(string endpoint, string json)
+        private async Task<string> PutAsync(string endpoint, string json)
         {
-            using (UnityWebRequest request = new UnityWebRequest(baseUrl + endpoint, "PATCH"))
+            using (UnityWebRequest request = new UnityWebRequest(baseUrl + endpoint, "PUT"))
             {
                 byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
                 request.uploadHandler = new UploadHandlerRaw(bodyRaw);
@@ -321,13 +408,16 @@ namespace SplatterVault
             if (request.result != UnityWebRequest.Result.Success)
             {
                 string errorMessage = request.error;
-                
+
                 if (!string.IsNullOrEmpty(request.downloadHandler?.text))
                 {
                     try
                     {
-                        ApiError error = JsonUtility.FromJson<ApiError>(request.downloadHandler.text);
-                        errorMessage = $"{error.name}: {error.message}";
+                        ApiError error = JsonConvert.DeserializeObject<ApiError>(request.downloadHandler.text, SerializerSettings);
+                        if (error != null && !string.IsNullOrEmpty(error.message))
+                        {
+                            errorMessage = $"{error.name}: {error.message}";
+                        }
                     }
                     catch
                     {
@@ -339,54 +429,20 @@ namespace SplatterVault
             }
         }
 
-        private T ParseResponse<T>(string json)
+        /// <summary>
+        /// Shared serializer settings for consistent JSON handling
+        /// </summary>
+        private static readonly JsonSerializerSettings SerializerSettings = new JsonSerializerSettings
         {
-            try
-            {
-                // Try to parse as wrapped response first
-                ApiResponse<T> wrapper = JsonUtility.FromJson<ApiResponse<T>>(json);
-                if (wrapper != null && wrapper.data != null)
-                {
-                    return wrapper.data;
-                }
-            }
-            catch
-            {
-                // If that fails, try parsing directly
-            }
+            NullValueHandling = NullValueHandling.Ignore,
+            FloatParseHandling = FloatParseHandling.Double
+        };
 
-            // Try direct parsing
-            return JsonUtility.FromJson<T>(json);
+        private T Deserialize<T>(string json)
+        {
+            return JsonConvert.DeserializeObject<T>(json, SerializerSettings);
         }
 
         #endregion
-
-        #region Helper Classes
-
-        [Serializable]
-        private class SubscriptionWrapper
-        {
-            public Subscription current;
-        }
-
-        #endregion
-    }
-
-    /// <summary>
-    /// Helper class for parsing JSON arrays (Unity's JsonUtility doesn't support arrays directly)
-    /// </summary>
-    public static class JsonHelper
-    {
-        public static List<T> FromJson<T>(string json)
-        {
-            Wrapper<T> wrapper = JsonUtility.FromJson<Wrapper<T>>("{\"items\":" + json + "}");
-            return new List<T>(wrapper.items);
-        }
-
-        [Serializable]
-        private class Wrapper<T>
-        {
-            public T[] items;
-        }
     }
 }

@@ -1,0 +1,9 @@
+[Oo]bj/
+[Bb]in/
+*.csproj
+*.sln
+*.suo
+*.user
+*.pidb
+*.booproj
+.vs/
