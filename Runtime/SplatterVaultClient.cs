@@ -15,11 +15,28 @@ namespace SplatterVault
     {
         private readonly string apiKey;
         private readonly string baseUrl;
+        private readonly bool isOrgKey;
+        private int? organizationId;
+
+        /// <summary>
+        /// Whether this client is using an organization API key (sv_org_ prefix)
+        /// </summary>
+        public bool IsOrganizationKey => isOrgKey;
+
+        /// <summary>
+        /// The organization ID for org-scoped endpoints (credit balance, subscription info).
+        /// Automatically used when creating sessions with org API keys.
+        /// </summary>
+        public int? OrganizationId
+        {
+            get => organizationId;
+            set => organizationId = value;
+        }
 
         /// <summary>
         /// Initialize the SplatterVault client
         /// </summary>
-        /// <param name="apiKey">Your SplatterVault API key (sv_...)</param>
+        /// <param name="apiKey">Your SplatterVault API key (sv_... or sv_org_...)</param>
         public SplatterVaultClient(string apiKey, string baseUrl = "https://splattervault.com/rest")
         {
             if (string.IsNullOrEmpty(apiKey))
@@ -27,6 +44,19 @@ namespace SplatterVault
 
             this.apiKey = apiKey;
             this.baseUrl = baseUrl.TrimEnd('/');
+            this.isOrgKey = apiKey.StartsWith("sv_org_");
+        }
+
+        /// <summary>
+        /// Initialize the SplatterVault client with an organization API key and explicit org ID.
+        /// The org ID is required for org-specific endpoints like credit balance and subscription info.
+        /// </summary>
+        /// <param name="apiKey">Your organization API key (sv_org_...)</param>
+        /// <param name="organizationId">The organization ID this key belongs to</param>
+        public SplatterVaultClient(string apiKey, int organizationId, string baseUrl = "https://splattervault.com/rest")
+            : this(apiKey, baseUrl)
+        {
+            this.organizationId = organizationId;
         }
 
         #region Session Management
@@ -41,6 +71,10 @@ namespace SplatterVault
         {
             try
             {
+                // Auto-inject organizationId for org API keys
+                if (isOrgKey && organizationId.HasValue && !request.organizationId.HasValue)
+                    request.organizationId = organizationId.Value;
+
                 string json = JsonConvert.SerializeObject(request, SerializerSettings);
                 string response = await PostAsync("/credits/sessions", json);
                 GameSession session = Deserialize<GameSession>(response);
@@ -64,6 +98,10 @@ namespace SplatterVault
         {
             try
             {
+                // Auto-inject organizationId for org API keys
+                if (isOrgKey && organizationId.HasValue && !request.organizationId.HasValue)
+                    request.organizationId = organizationId.Value;
+
                 string json = JsonConvert.SerializeObject(request, SerializerSettings);
                 string response = await PostAsync("/subscriptions/sessions", json);
                 GameSession session = Deserialize<GameSession>(response);
@@ -100,7 +138,8 @@ namespace SplatterVault
         }
 
         /// <summary>
-        /// Get all sessions for the authenticated user
+        /// Get all sessions for the authenticated user or organization.
+        /// For org API keys, fetches org-scoped sessions from credit and subscription endpoints.
         /// </summary>
         public async Task<List<GameSession>> GetMySessionsAsync(
             Action<List<GameSession>> onSuccess = null,
@@ -108,8 +147,30 @@ namespace SplatterVault
         {
             try
             {
-                string response = await GetAsync("/game-sessions/my-sessions");
-                List<GameSession> sessions = JsonConvert.DeserializeObject<List<GameSession>>(response, SerializerSettings);
+                List<GameSession> sessions;
+
+                if (isOrgKey)
+                {
+                    // Org API keys: fetch from credit and subscription session endpoints
+                    // which properly scope by organization via the middleware
+                    string creditResponse = await GetAsync("/credits/sessions");
+                    var creditSessions = JsonConvert.DeserializeObject<List<GameSession>>(creditResponse, SerializerSettings)
+                        ?? new List<GameSession>();
+
+                    string subResponse = await GetAsync("/subscriptions/sessions");
+                    var subSessions = JsonConvert.DeserializeObject<List<GameSession>>(subResponse, SerializerSettings)
+                        ?? new List<GameSession>();
+
+                    sessions = new List<GameSession>();
+                    sessions.AddRange(creditSessions);
+                    sessions.AddRange(subSessions);
+                }
+                else
+                {
+                    string response = await GetAsync("/game-sessions/my-sessions");
+                    sessions = JsonConvert.DeserializeObject<List<GameSession>>(response, SerializerSettings);
+                }
+
                 onSuccess?.Invoke(sessions);
                 return sessions;
             }
@@ -253,6 +314,148 @@ namespace SplatterVault
             return await UpdateCreditSessionFriendlyNameAsync(session.id, friendlyName, onSuccess, onError);
         }
 
+        /// <summary>
+        /// Update the schedule for a credit-based session
+        /// </summary>
+        public async Task<GameSession> UpdateCreditSessionScheduleAsync(
+            int sessionId,
+            DateTime? scheduledStartTime = null,
+            DateTime? scheduledEndTime = null,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                var body = new Dictionary<string, object>();
+                if (scheduledStartTime.HasValue)
+                    body["scheduledStartTime"] = scheduledStartTime.Value.ToUniversalTime().ToString("o");
+                if (scheduledEndTime.HasValue)
+                    body["scheduledEndTime"] = scheduledEndTime.Value.ToUniversalTime().ToString("o");
+
+                string json = JsonConvert.SerializeObject(body, SerializerSettings);
+                string response = await PutAsync($"/credits/sessions/{sessionId}/schedule", json);
+                GameSession session = Deserialize<GameSession>(response);
+                onSuccess?.Invoke(session);
+                return session;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Cancel a scheduled credit session
+        /// </summary>
+        public async Task<GameSession> CancelCreditSessionScheduleAsync(
+            int sessionId,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                string response = await PostAsync($"/credits/sessions/{sessionId}/cancel-schedule", "{}");
+                CancelScheduleResult result = Deserialize<CancelScheduleResult>(response);
+                onSuccess?.Invoke(result.session);
+                return result.session;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Update the schedule for a subscription-based session
+        /// </summary>
+        public async Task<GameSession> UpdateSubscriptionSessionScheduleAsync(
+            int sessionId,
+            DateTime? scheduledStartTime = null,
+            DateTime? scheduledEndTime = null,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                var body = new Dictionary<string, object>();
+                if (scheduledStartTime.HasValue)
+                    body["scheduledStartTime"] = scheduledStartTime.Value.ToUniversalTime().ToString("o");
+                if (scheduledEndTime.HasValue)
+                    body["scheduledEndTime"] = scheduledEndTime.Value.ToUniversalTime().ToString("o");
+
+                string json = JsonConvert.SerializeObject(body, SerializerSettings);
+                string response = await PutAsync($"/subscriptions/sessions/{sessionId}/schedule", json);
+                GameSession session = Deserialize<GameSession>(response);
+                onSuccess?.Invoke(session);
+                return session;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Cancel a scheduled subscription session
+        /// </summary>
+        public async Task<GameSession> CancelSubscriptionSessionScheduleAsync(
+            int sessionId,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                string response = await PostAsync($"/subscriptions/sessions/{sessionId}/cancel-schedule", "{}");
+                CancelScheduleResult result = Deserialize<CancelScheduleResult>(response);
+                onSuccess?.Invoke(result.session);
+                return result.session;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Update the schedule for a session, automatically routing based on serverType.
+        /// </summary>
+        public async Task<GameSession> UpdateSessionScheduleAsync(
+            GameSession session,
+            DateTime? scheduledStartTime = null,
+            DateTime? scheduledEndTime = null,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            if (session == null)
+                throw new ArgumentNullException(nameof(session));
+
+            if (session.serverType == "Subscription")
+                return await UpdateSubscriptionSessionScheduleAsync(session.id, scheduledStartTime, scheduledEndTime, onSuccess, onError);
+
+            return await UpdateCreditSessionScheduleAsync(session.id, scheduledStartTime, scheduledEndTime, onSuccess, onError);
+        }
+
+        /// <summary>
+        /// Cancel a scheduled session, automatically routing based on serverType.
+        /// </summary>
+        public async Task<GameSession> CancelSessionScheduleAsync(
+            GameSession session,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            if (session == null)
+                throw new ArgumentNullException(nameof(session));
+
+            if (session.serverType == "Subscription")
+                return await CancelSubscriptionSessionScheduleAsync(session.id, onSuccess, onError);
+
+            return await CancelCreditSessionScheduleAsync(session.id, onSuccess, onError);
+        }
+
         #endregion
 
         #region Credits
@@ -304,18 +507,18 @@ namespace SplatterVault
         #region Subscription
 
         /// <summary>
-        /// Get current subscription details
+        /// Get current subscription details (returns wrapper with current, all subscriptions)
         /// </summary>
-        public async Task<Subscription> GetSubscriptionAsync(
-            Action<Subscription> onSuccess = null,
+        public async Task<SubscriptionDetails> GetSubscriptionAsync(
+            Action<SubscriptionDetails> onSuccess = null,
             Action<string> onError = null)
         {
             try
             {
                 string response = await GetAsync("/subscriptions");
-                Subscription subscription = Deserialize<Subscription>(response);
-                onSuccess?.Invoke(subscription);
-                return subscription;
+                SubscriptionDetails details = Deserialize<SubscriptionDetails>(response);
+                onSuccess?.Invoke(details);
+                return details;
             }
             catch (Exception ex)
             {
@@ -343,6 +546,69 @@ namespace SplatterVault
                 onError?.Invoke(ex.Message);
                 throw;
             }
+        }
+
+        #endregion
+
+        #region Organization
+
+        /// <summary>
+        /// Get the organization's credit balance and stats.
+        /// Requires an org API key or OrganizationId to be set.
+        /// </summary>
+        /// <param name="orgId">Optional org ID override. Falls back to OrganizationId property.</param>
+        public async Task<OrgCreditStats> GetOrgCreditBalanceAsync(
+            int? orgId = null,
+            Action<OrgCreditStats> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                int resolvedOrgId = ResolveOrgId(orgId);
+                string response = await GetAsync($"/organizations/{resolvedOrgId}/credits");
+                OrgCreditStats stats = Deserialize<OrgCreditStats>(response);
+                onSuccess?.Invoke(stats);
+                return stats;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Get the organization's subscription info.
+        /// Requires an org API key or OrganizationId to be set.
+        /// </summary>
+        /// <param name="orgId">Optional org ID override. Falls back to OrganizationId property.</param>
+        public async Task<OrgSubscriptionInfo> GetOrgSubscriptionAsync(
+            int? orgId = null,
+            Action<OrgSubscriptionInfo> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                int resolvedOrgId = ResolveOrgId(orgId);
+                string response = await GetAsync($"/organizations/{resolvedOrgId}/subscription");
+                OrgSubscriptionInfo info = Deserialize<OrgSubscriptionInfo>(response);
+                onSuccess?.Invoke(info);
+                return info;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        private int ResolveOrgId(int? orgId)
+        {
+            int? resolved = orgId ?? organizationId;
+            if (!resolved.HasValue)
+                throw new InvalidOperationException(
+                    "Organization ID required. Set it via the constructor or OrganizationId property, or pass it explicitly.");
+            return resolved.Value;
         }
 
         #endregion

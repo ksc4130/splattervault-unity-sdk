@@ -5,6 +5,29 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-03-30
+
+### Added
+- **Organization API key support** — `sv_org_` prefixed keys now work across all endpoints
+- Organization constructor: `new SplatterVaultClient(apiKey, organizationId)` for org-scoped operations
+- `IsOrganizationKey` property to detect org API key usage
+- `OrganizationId` property (get/set) for org-scoped endpoints
+- Auto-injection of `organizationId` into session creation requests when using org API keys
+- `GetOrgCreditBalanceAsync()` — fetch organization credit balance
+- `GetOrgSubscriptionAsync()` — fetch organization subscription info
+- `GetMySessionsAsync()` for org keys — fetches from both credit and subscription session endpoints
+- `OrgCreditStats` model with `GetAvailableBalance()` helper
+- `OrgSubscriptionInfo` model
+- `SubscriptionDetails` model (wraps current + all subscriptions)
+- `CancelScheduleResult` model
+- `GameSession.organizationId`, `stopReason`, `stopReasonDetails` fields
+- `CreateSessionRequest.organizationId`, `buildId` fields with setter helpers
+- .NET 8 integration test harness in `Tests/` directory
+
+### Fixed
+- `GameSession.stopReasonDetails` changed from `string` to `object` — API returns JSONB, not a plain string
+- Org API keys no longer crash on `/credits`, `/credits/stats`, or `/subscriptions/usage` endpoints (API-side fix)
+
 ## [2.0.0] - 2026-03-20
 
 ### Breaking Changes

@@ -4,6 +4,23 @@ Unity SDK for interacting with the SplatterVault API to create and manage game s
 
 ## Installation
 
+### Unity Package Manager (recommended)
+
+Add to your `Packages/manifest.json`:
+```json
+{
+  "dependencies": {
+    "com.splattervault.sdk": "https://github.com/ksc4130/splattervault-unity-sdk.git"
+  }
+}
+```
+
+Or in Unity: **Window > Package Manager > + > Add package from git URL** and enter:
+```
+https://github.com/ksc4130/splattervault-unity-sdk.git
+```
+
+### Manual
 1. Copy the `SplatterVault` folder into your Unity project's `Assets` folder
 2. The SDK requires Unity 2019.4 or later
 3. Ensure your project has internet access enabled in Player Settings
@@ -13,8 +30,11 @@ Unity SDK for interacting with the SplatterVault API to create and manage game s
 ```csharp
 using SplatterVault;
 
-// Initialize the client with your API key
+// Personal API key
 var client = new SplatterVaultClient("sv_your_api_key_here");
+
+// Or organization API key (auto-scopes all requests to the org)
+var orgClient = new SplatterVaultClient("sv_org_your_key_here", 1);
 
 // Create a session
 var request = new CreateSessionRequest
@@ -26,26 +46,33 @@ var request = new CreateSessionRequest
     friendlyName = "My Unity Game Session"
 };
 
-await client.CreateCreditSessionAsync(request, (session) => {
-    Debug.Log($"Session created! Code: {session.code}");
-}, (error) => {
-    Debug.LogError($"Error: {error}");
-});
+GameSession session = await client.CreateCreditSessionAsync(request);
+Debug.Log($"Session created! Code: {session.code}, Status: {session.status}");
+
+// Check status later
+GameSession updated = await client.GetSessionAsync(session.id);
+if (updated.IsActive())
+    Debug.Log($"Connect to: {updated.slaveIp}:{updated.GetServerPort()}");
+
+// Stop when done
+StopSessionResult result = await client.StopCreditSessionAsync(session.id);
+Debug.Log($"Cost: {result.totalCost} credits for {result.totalHours} hours");
 ```
 
 ## Features
 
-- ✅ Create credit-based game sessions
-- ✅ Create subscription-based game sessions
-- ✅ Get session details
-- ✅ List user sessions
-- ✅ Stop sessions
-- ✅ Update friendly names
-- ✅ Scheduling support (start/end times)
-- ✅ Get credit balance
-- ✅ Async/await support
-- ✅ Error handling
-- ✅ Response models
+- Create credit-based and subscription-based game sessions
+- Get session details and list user sessions
+- Stop sessions (auto-routes by server type)
+- Update friendly names and schedules
+- Scheduling support (start/end times)
+- Credit balance and usage stats
+- **Organization API key support** — `sv_org_` keys auto-scope to org
+- Organization credit balance and subscription info
+- Custom game type configurations with variables
+- Full async/await support
+- Newtonsoft.Json-based deserialization
+- Master Server Toolkit (MST) integration
 
 ## API Reference
 
@@ -55,7 +82,20 @@ Main client class for API interactions.
 
 #### Constructor
 ```csharp
-public SplatterVaultClient(string apiKey, string baseUrl = "https://api.splattervault.com/rest")
+// Personal API key
+var client = new SplatterVaultClient("sv_your_key");
+
+// Organization API key with explicit org ID
+var client = new SplatterVaultClient("sv_org_your_key", organizationId: 1);
+
+// Optional: override base URL (defaults to https://splattervault.com/rest)
+var client = new SplatterVaultClient("sv_your_key", baseUrl: "http://localhost:3000/rest");
+```
+
+#### Properties
+```csharp
+bool IsOrganizationKey { get; }     // true for sv_org_ keys
+int? OrganizationId { get; set; }   // org ID for org-scoped endpoints
 ```
 
 #### Methods
@@ -191,7 +231,31 @@ else
 }
 ```
 
-### Example 5: Using Custom Game Type Configurations
+### Example 5: Organization API Key
+
+```csharp
+// Org API keys auto-scope all requests to the organization
+var client = new SplatterVaultClient("sv_org_your_key_here", 1);
+
+// Create a session billed to org credits
+var session = await client.CreateCreditSessionAsync(new CreateSessionRequest
+{
+    region = "NYC3",
+    gameType = "PaintballPlayground",
+    mode = "XBall",
+    friendlyName = "Org Practice Server"
+});
+
+// Check org credit balance
+var orgCredits = await client.GetOrgCreditBalanceAsync();
+Debug.Log($"Org balance: {orgCredits.GetAvailableBalance()}");
+
+// List all org sessions (fetches from both credit + subscription endpoints)
+var sessions = await client.GetMySessionsAsync();
+Debug.Log($"Org has {sessions.Count} sessions");
+```
+
+### Example 6: Using Custom Game Type Configurations
 
 ```csharp
 // Create a session with a custom game type configuration
@@ -216,7 +280,7 @@ await client.CreateCreditSessionAsync(request,
 );
 ```
 
-### Example 6: Custom Variables with Dictionary
+### Example 7: Custom Variables with Dictionary
 
 ```csharp
 var request = new CreateSessionRequest();

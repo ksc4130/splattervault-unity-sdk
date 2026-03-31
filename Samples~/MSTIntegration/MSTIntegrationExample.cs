@@ -271,7 +271,7 @@ public class MSTIntegrationExample : MonoBehaviour
             UnregisterFromMST();
 
             // STEP 2: Stop the SplatterVault server
-            await svClient.StopSessionAsync(currentSession.id);
+            await svClient.StopSessionAsync(currentSession);
 
             // Clear state
             currentSession = null;
@@ -318,7 +318,7 @@ public class MSTIntegrationExample : MonoBehaviour
         if (currentSession == null || !currentSession.IsReadyForMST())
             return "No server available";
 
-        return currentSession.GetConnectionString(gamePort);
+        return currentSession.GetConnectionString();
     }
 
     /// <summary>

@@ -10,9 +10,12 @@ using SplatterVault;
 public class SimpleSessionManager : MonoBehaviour
 {
     [Header("Configuration")]
-    [Tooltip("Your SplatterVault API key (keep this secret!)")]
+    [Tooltip("Your SplatterVault API key (sv_... for personal, sv_org_... for organization)")]
     [SerializeField] private string apiKey = "sv_your_api_key_here";
-    
+
+    [Tooltip("Organization ID (required for org API keys to use org credit/subscription endpoints)")]
+    [SerializeField] private int organizationId = 0;
+
     [SerializeField] private Region region = Region.NYC3;
     [SerializeField] private GameType gameType = GameType.PaintballPlayground;
     [SerializeField] private PaintballMode paintballMode = PaintballMode.XBall;
@@ -35,8 +38,16 @@ public class SimpleSessionManager : MonoBehaviour
             return;
         }
 
-        client = new SplatterVaultClient(apiKey);
-        Debug.Log("SplatterVault client initialized");
+        if (organizationId > 0)
+        {
+            client = new SplatterVaultClient(apiKey, organizationId);
+            Debug.Log($"SplatterVault client initialized (org key: {client.IsOrganizationKey}, orgId: {organizationId})");
+        }
+        else
+        {
+            client = new SplatterVaultClient(apiKey);
+            Debug.Log($"SplatterVault client initialized (org key: {client.IsOrganizationKey})");
+        }
     }
 
     /// <summary>
@@ -172,14 +183,50 @@ public class SimpleSessionManager : MonoBehaviour
 
             CreditBalance balance = await client.GetCreditBalanceAsync();
 
-            float hours = balance.GetBalanceInHours();
-            Debug.Log($"✓ Credit Balance: {balance.balance} credits ({hours:F1} hours)");
+            // 0.25 credits/min is a typical small server rate — adjust based on your server size
+            float hours = balance.GetBalanceInHours(0.25f);
+            Debug.Log($"✓ Credit Balance: {balance.balance} credits (~{hours:F1} hours at 0.25/min)");
             Debug.Log($"  Total Purchased: {balance.totalPurchased}");
             Debug.Log($"  Total Used: {balance.totalUsed}");
         }
         catch (Exception ex)
         {
             Debug.LogError($"Failed to get credits: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Check organization credit balance (only works with org API keys)
+    /// </summary>
+    public async void CheckOrgCredits()
+    {
+        if (client == null)
+        {
+            Debug.LogError("Client not initialized!");
+            return;
+        }
+
+        if (!client.IsOrganizationKey)
+        {
+            Debug.LogWarning("CheckOrgCredits requires an organization API key (sv_org_...)");
+            return;
+        }
+
+        try
+        {
+            Debug.Log("Checking organization credit balance...");
+
+            OrgCreditStats stats = await client.GetOrgCreditBalanceAsync();
+
+            Debug.Log($"Org Credit Balance: {stats.balance}");
+            Debug.Log($"  Subscription Credits: {stats.subscriptionBalance}");
+            Debug.Log($"  Ad-hoc Credits: {stats.adHocBalance}");
+            Debug.Log($"  Total Purchased: {stats.totalPurchased}");
+            Debug.Log($"  Total Used: {stats.totalUsed}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to get org credits: {ex.Message}");
         }
     }
 
@@ -198,7 +245,7 @@ public class SimpleSessionManager : MonoBehaviour
         {
             Debug.Log($"Stopping session {activeSession.code}...");
 
-            await client.StopSessionAsync(activeSession.id);
+            await client.StopSessionAsync(activeSession);
 
             Debug.Log("✓ Session stopped successfully");
 

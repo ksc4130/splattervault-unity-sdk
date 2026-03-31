@@ -215,7 +215,7 @@ public class TournamentManager : MonoBehaviour
         {
             try
             {
-                await client.StopSessionAsync(session.id);
+                await client.StopSessionAsync(session);
                 stopped++;
                 Debug.Log($"  ✓ Stopped {session.friendlyName}");
             }

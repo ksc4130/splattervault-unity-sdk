@@ -291,7 +291,7 @@ public class SplatterVaultSessionManager : MonoBehaviour
             }
 
             // Stop server
-            await client.StopSessionAsync(currentSession.id);
+            await client.StopSessionAsync(currentSession);
 
             string stoppedCode = serverCode;
             
@@ -355,7 +355,7 @@ public class SplatterVaultSessionManager : MonoBehaviour
     public string GetConnectionString()
     {
         if (currentSession == null) return "";
-        return currentSession.GetConnectionString(gamePort);
+        return currentSession.GetConnectionString();
     }
 
     #endregion

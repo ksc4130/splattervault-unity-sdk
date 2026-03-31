@@ -107,6 +107,8 @@ namespace SplatterVault
         public string scheduledStartTime; // ISO 8601 format
         public string scheduledEndTime;   // ISO 8601 format
         public int? serverSizeId;         // Optional: server size ID (defaults per game type)
+        public int? organizationId;      // Optional: bill to organization credits instead of personal
+        public int? buildId;             // Optional: use a specific build
 
         // Fields for custom game type configurations
         public string gameTypeConfigKey;  // Optional: unique key for custom game type config
@@ -177,6 +179,22 @@ namespace SplatterVault
         }
 
         /// <summary>
+        /// Set the organization ID to bill session to org credits
+        /// </summary>
+        public void SetOrganizationId(int orgId)
+        {
+            organizationId = orgId;
+        }
+
+        /// <summary>
+        /// Set the build ID to use a specific game build
+        /// </summary>
+        public void SetBuildId(int id)
+        {
+            buildId = id;
+        }
+
+        /// <summary>
         /// Set the game type config key for custom configurations
         /// </summary>
         /// <param name="configKey">Unique key from custom game type (e.g., "usr_123_abc456xyz")</param>
@@ -243,6 +261,9 @@ namespace SplatterVault
         public int? buildId;
         public int? volumeId;
         public bool creditsDeducted;
+        public int? organizationId;
+        public string stopReason;
+        public object stopReasonDetails;
 
         /// <summary>
         /// Server size details (populated when API includes the relation)
@@ -462,6 +483,16 @@ namespace SplatterVault
     }
 
     /// <summary>
+    /// Subscription details response (from GET /subscriptions)
+    /// </summary>
+    [Serializable]
+    public class SubscriptionDetails
+    {
+        public Subscription current;
+        public List<Subscription> all;
+    }
+
+    /// <summary>
     /// Usage statistics
     /// </summary>
     [Serializable]
@@ -474,5 +505,49 @@ namespace SplatterVault
         public int monthlyCredits;
         public int totalSessions;
         public int activeSessionsThisMonth;
+    }
+
+    /// <summary>
+    /// Organization credit statistics (from /organizations/:orgId/credits)
+    /// </summary>
+    [Serializable]
+    public class OrgCreditStats
+    {
+        public float balance;
+        public float subscriptionBalance;
+        public float adHocBalance;
+        public float totalPurchased;
+        public float totalUsed;
+        public bool autoBuyEnabled;
+        public float? autoBuyThreshold;
+        public float? autoBuyCreditAmount;
+
+        /// <summary>
+        /// Gets the total available balance
+        /// </summary>
+        public float GetAvailableBalance()
+        {
+            return subscriptionBalance + adHocBalance;
+        }
+    }
+
+    /// <summary>
+    /// Organization subscription info (from /organizations/:orgId/subscription)
+    /// </summary>
+    [Serializable]
+    public class OrgSubscriptionInfo
+    {
+        public Subscription current;
+        public List<Subscription> all;
+    }
+
+    /// <summary>
+    /// Result from canceling a scheduled session
+    /// </summary>
+    [Serializable]
+    public class CancelScheduleResult
+    {
+        public string message;
+        public GameSession session;
     }
 }

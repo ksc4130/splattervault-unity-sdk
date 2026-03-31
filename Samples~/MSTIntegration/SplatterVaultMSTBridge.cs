@@ -185,7 +185,7 @@ public class SplatterVaultMSTBridge : MonoBehaviour
             }
 
             // Stop the SplatterVault server
-            await svClient.StopSessionAsync(currentSession.id);
+            await svClient.StopSessionAsync(currentSession);
 
             string stoppedCode = serverCode;
             
