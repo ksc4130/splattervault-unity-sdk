@@ -5,28 +5,41 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - 2026-03-30
+## [3.0.0] - 2026-03-31
+
+### Breaking Changes
+- **Removed game-specific enums**: `GameType`, `PaintballMode`, `SnapshotMode`, `ValheimMode` and all `ToApiString()` extensions. The SDK no longer hardcodes knowledge of specific games.
+- **`CreateSessionRequest.gameType` removed** — replaced by `gameKey`
+- **`CreateSessionRequest.mode` removed** — mode is now a launch argument, pass via `AddCustomVariable()`
+- **`CreateSessionRequest.gameTypeConfigKey` removed** — replaced by `gameKey`
+- Helper methods removed: `SetGameType()`, `SetPaintballMode()`, `SetSnapshotMode()`, `SetValheimMode()`, `SetGameTypeConfigKey()`, `SetMode()`
 
 ### Added
-- **Organization API key support** — `sv_org_` prefixed keys now work across all endpoints
-- Organization constructor: `new SplatterVaultClient(apiKey, organizationId)` for org-scoped operations
-- `IsOrganizationKey` property to detect org API key usage
-- `OrganizationId` property (get/set) for org-scoped endpoints
-- Auto-injection of `organizationId` into session creation requests when using org API keys
-- `GetOrgCreditBalanceAsync()` — fetch organization credit balance
-- `GetOrgSubscriptionAsync()` — fetch organization subscription info
-- `GetMySessionsAsync()` for org keys — fetches from both credit and subscription session endpoints
-- `OrgCreditStats` model with `GetAvailableBalance()` helper
-- `OrgSubscriptionInfo` model
-- `SubscriptionDetails` model (wraps current + all subscriptions)
-- `CancelScheduleResult` model
+- `CreateSessionRequest.gameKey` — game config key (e.g., `"sys_1774636058786_30e0fc4d"`), serializes as `gameTypeConfigKey` for the API
+- `GetConfigurableArgsAsync(gameKey)` — fetch available launch arguments for a game (mode, max players, etc.)
+- `StructuredLaunchArg` and `SelectOption` models for dynamic game configuration UI
+- **Organization API key support** — `sv_org_` prefixed keys work across all endpoints
+- Organization constructor, `GetOrgCreditBalanceAsync()`, `GetOrgSubscriptionAsync()`
+- `OrgCreditStats`, `OrgSubscriptionInfo`, `SubscriptionDetails`, `CancelScheduleResult` models
 - `GameSession.organizationId`, `stopReason`, `stopReasonDetails` fields
-- `CreateSessionRequest.organizationId`, `buildId` fields with setter helpers
 - .NET 8 integration test harness in `Tests/` directory
 
 ### Fixed
-- `GameSession.stopReasonDetails` changed from `string` to `object` — API returns JSONB, not a plain string
-- Org API keys no longer crash on `/credits`, `/credits/stats`, or `/subscriptions/usage` endpoints (API-side fix)
+- `GameSession.stopReasonDetails` changed from `string` to `object` (API returns JSONB)
+
+### Migration from v2.x
+```csharp
+// OLD (v2.x)
+request.SetGameType(GameType.PaintballPlayground);
+request.SetPaintballMode(PaintballMode.XBall);
+
+// NEW (v3.0)
+request.gameKey = "sys_1774636058786_30e0fc4d";  // from your dashboard
+request.AddCustomVariable("-mstRoomMode", "XBall");  // mode is a launch arg
+
+// Discover available options dynamically:
+var args = await client.GetConfigurableArgsAsync(gameKey);
+```
 
 ## [2.0.0] - 2026-03-20
 

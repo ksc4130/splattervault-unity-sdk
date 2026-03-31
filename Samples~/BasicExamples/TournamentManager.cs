@@ -70,8 +70,7 @@ public class TournamentManager : MonoBehaviour
                 var request = new CreateSessionRequest
                 {
                     region = "NYC3",
-                    gameType = "PaintballPlayground",
-                    mode = "XBall",
+                    gameKey = "your_game_key_here",
                     isPublic = true,
                     friendlyName = $"Tournament Match {i + 1}"
                 };
@@ -176,8 +175,7 @@ public class TournamentManager : MonoBehaviour
             var request = new CreateSessionRequest
             {
                 region = "NYC3",
-                gameType = "PaintballPlayground",
-                mode = "XBall",
+                gameKey = "your_game_key_here",
                 isPublic = true,
                 friendlyName = matchName
             };

@@ -40,9 +40,9 @@ public class MSTIntegrationExample : MonoBehaviour
     
     [Tooltip("Server region (NYC3 = New York, TOR1 = Toronto, etc.)")]
     [SerializeField] private Region region = Region.NYC3;
-    
-    [Tooltip("Game mode for Paintball Playground")]
-    [SerializeField] private PaintballMode gameMode = PaintballMode.XBall;
+
+    [Tooltip("Game config key from your SplatterVault dashboard")]
+    [SerializeField] private string gameKey = "your_game_key_here";
 
     [Header("Game Configuration")]
     [Tooltip("Name shown in server browser")]
@@ -122,12 +122,11 @@ public class MSTIntegrationExample : MonoBehaviour
             // STEP 1: Create the server request
             var request = new CreateSessionRequest
             {
+                gameKey = this.gameKey,
                 friendlyName = gameName,
                 isPublic = true
             };
             request.SetRegion(region);
-            request.SetGameType(GameType.PaintballPlayground);
-            request.SetPaintballMode(gameMode);
 
             // STEP 2: Create server and wait for it to be ready
             // This can take 30-60 seconds as the server boots up

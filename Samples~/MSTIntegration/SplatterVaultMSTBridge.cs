@@ -15,8 +15,9 @@ public class SplatterVaultMSTBridge : MonoBehaviour
     [SerializeField] private string apiKey = "sv_your_api_key_here";
     
     [SerializeField] private Region region = Region.NYC3;
-    [SerializeField] private GameType gameType = GameType.PaintballPlayground;
-    [SerializeField] private PaintballMode mode = PaintballMode.XBall;
+
+    [Tooltip("Game config key from your SplatterVault dashboard")]
+    [SerializeField] private string gameKey = "your_game_key_here";
     
     [Header("Server Settings")]
     [SerializeField] private int maxPlayers = 20;
@@ -121,12 +122,11 @@ public class SplatterVaultMSTBridge : MonoBehaviour
             // Create the server request
             var request = new CreateSessionRequest
             {
+                gameKey = this.gameKey,
                 friendlyName = friendlyName ?? $"Game {DateTime.Now:HH:mm}",
                 isPublic = true
             };
             request.SetRegion(region);
-            request.SetGameType(gameType);
-            request.SetPaintballMode(mode);
 
             // Create and wait for server to be ready
             SetStatus(BridgeState.WaitingForServer, "Waiting for server to start...");

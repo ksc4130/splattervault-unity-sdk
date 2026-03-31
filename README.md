@@ -1,459 +1,483 @@
 # SplatterVault Unity SDK
 
-Unity SDK for interacting with the SplatterVault API to create and manage game sessions programmatically.
+Official Unity SDK for creating and managing dedicated game servers through the SplatterVault platform. Supports credit-based and subscription-based sessions, organization billing, dynamic game configuration, and Master Server Toolkit integration.
 
 ## Installation
 
 ### Unity Package Manager (recommended)
 
-Add to your `Packages/manifest.json`:
-```json
-{
-  "dependencies": {
-    "com.splattervault.sdk": "https://github.com/ksc4130/splattervault-unity-sdk.git"
-  }
-}
-```
+In Unity: **Window > Package Manager > + > Add package from git URL** and enter:
 
-Or in Unity: **Window > Package Manager > + > Add package from git URL** and enter:
 ```
 https://github.com/ksc4130/splattervault-unity-sdk.git
 ```
 
+Or add directly to `Packages/manifest.json`:
+
+```json
+{
+  "dependencies": {
+    "com.splattervault.sdk": "https://github.com/ksc4130/splattervault-unity-sdk.git#v3.0.0"
+  }
+}
+```
+
 ### Manual
-1. Copy the `SplatterVault` folder into your Unity project's `Assets` folder
-2. The SDK requires Unity 2019.4 or later
-3. Ensure your project has internet access enabled in Player Settings
+
+Copy the `Runtime/` folder into your Unity project's `Assets/SplatterVault/` directory.
+
+### Requirements
+
+- Unity 2019.4 or later
+- .NET 4.x or .NET Standard 2.0
+- Newtonsoft.Json (included with Unity 2020+, or install via Package Manager)
+- Internet access enabled in Player Settings
 
 ## Quick Start
 
 ```csharp
 using SplatterVault;
 
-// Personal API key
-var client = new SplatterVaultClient("sv_your_api_key_here");
+// 1. Create a client with your API key
+var client = new SplatterVaultClient("sv_your_api_key");
 
-// Or organization API key (auto-scopes all requests to the org)
-var orgClient = new SplatterVaultClient("sv_org_your_key_here", 1);
+// 2. Discover available game options
+var args = await client.GetConfigurableArgsAsync("your_game_key");
+// Returns configurable launch arguments: mode (select), maxPlayers (number), etc.
 
-// Create a session
+// 3. Create a session
 var request = new CreateSessionRequest
 {
-    region = "NYC3",
-    gameType = "PaintballPlayground",
-    mode = "XBall",
-    isPublic = false,
-    friendlyName = "My Unity Game Session"
+    gameKey = "your_game_key",   // from your SplatterVault dashboard
+    friendlyName = "My Server"
 };
+request.AddCustomVariable("-mstRoomMode", "XBall");  // set game mode
+request.AddCustomVariable("-maxPlayers", "10");       // set max players
 
 GameSession session = await client.CreateCreditSessionAsync(request);
-Debug.Log($"Session created! Code: {session.code}, Status: {session.status}");
+Debug.Log($"Server starting! Code: {session.code}");
 
-// Check status later
-GameSession updated = await client.GetSessionAsync(session.id);
-if (updated.IsActive())
-    Debug.Log($"Connect to: {updated.slaveIp}:{updated.GetServerPort()}");
+// 4. Wait for server to be ready
+while (session.IsPending())
+{
+    await Task.Delay(5000);
+    session = await client.GetSessionAsync(session.id);
+}
 
-// Stop when done
+// 5. Connect players
+if (session.IsActive())
+    Debug.Log($"Connect to {session.slaveIp}:{session.GetServerPort()}");
+
+// 6. Stop when done
 StopSessionResult result = await client.StopCreditSessionAsync(session.id);
-Debug.Log($"Cost: {result.totalCost} credits for {result.totalHours} hours");
+Debug.Log($"Cost: {result.totalCost} credits ({result.totalHours} hours)");
 ```
 
-## Features
+## Step-by-Step Guide
 
-- Create credit-based and subscription-based game sessions
-- Get session details and list user sessions
-- Stop sessions (auto-routes by server type)
-- Update friendly names and schedules
-- Scheduling support (start/end times)
-- Credit balance and usage stats
-- **Organization API key support** — `sv_org_` keys auto-scope to org
-- Organization credit balance and subscription info
-- Custom game type configurations with variables
-- Full async/await support
-- Newtonsoft.Json-based deserialization
-- Master Server Toolkit (MST) integration
+### Step 1: Get Your API Key and Game Key
+
+1. Sign up at [splattervault.com](https://splattervault.com)
+2. Go to your dashboard and generate an API key
+   - **Personal key** (`sv_...`): bills to your personal credits
+   - **Organization key** (`sv_org_...`): bills to your org's credits
+3. Find your **game key** in the game configuration section (e.g., `sys_1774636058786_30e0fc4d`)
+
+### Step 2: Initialize the Client
+
+```csharp
+using SplatterVault;
+
+// Personal API key
+var client = new SplatterVaultClient("sv_your_api_key");
+
+// Organization API key with org ID
+var client = new SplatterVaultClient("sv_org_your_key", organizationId: 1);
+
+// Custom API URL (for local development)
+var client = new SplatterVaultClient("sv_your_key", baseUrl: "http://localhost:3000/rest");
+```
+
+### Step 3: Discover Game Options
+
+Each game defines configurable launch arguments. Query them to build dynamic UI:
+
+```csharp
+var args = await client.GetConfigurableArgsAsync("your_game_key");
+
+foreach (var arg in args)
+{
+    Debug.Log($"{arg.label} ({arg.type}): {arg.description}");
+
+    if (arg.type == "select" && arg.options != null)
+    {
+        foreach (var opt in arg.options)
+            Debug.Log($"  - {opt.label} = {opt.value}");
+    }
+
+    if (arg.type == "number")
+        Debug.Log($"  Range: {arg.min} - {arg.max}");
+}
+```
+
+**Argument types:**
+| Type | Description | UI Widget |
+|------|-------------|-----------|
+| `select` | Predefined choices (e.g., game mode) | Dropdown |
+| `number` | Numeric with min/max (e.g., max players) | Slider / Input |
+| `text` | Free text with optional regex validation | Text field |
+| `boolean` | Toggle (e.g., friendly fire) | Checkbox |
+| `hidden` | Platform-managed, not shown to users | None |
+
+Arguments with `semantic: "mode"` represent the game mode selection.
+
+### Step 4: Create a Session
+
+```csharp
+var request = new CreateSessionRequest
+{
+    gameKey = "your_game_key",
+    isPublic = false,
+    friendlyName = "Practice Match"
+};
+request.SetRegion(Region.NYC3);
+
+// Pass any configurable arguments as custom variables
+request.AddCustomVariable("-mstRoomMode", "XBall");
+request.AddCustomVariable("-maxPlayers", "10");
+
+// Set auto-stop time (optional)
+request.SetScheduledEndTime(DateTime.UtcNow.AddHours(2));
+
+// Create with credits or subscription
+GameSession session = await client.CreateCreditSessionAsync(request);
+// or: await client.CreateSubscriptionSessionAsync(request);
+
+Debug.Log($"Session {session.id} created, status: {session.status}");
+```
+
+### Step 5: Monitor Session Status
+
+Sessions go through these states: **Scheduled** -> **Pending** -> **Active** -> **Not Active**
+
+```csharp
+var session = await client.GetSessionAsync(sessionId);
+
+if (session.IsPending())
+    Debug.Log("Server is provisioning...");
+else if (session.IsActive())
+    Debug.Log($"Ready! Connect to {session.slaveIp}:{session.GetServerPort()}");
+else if (session.IsStopped())
+    Debug.Log("Session has ended");
+```
+
+### Step 6: Stop a Session
+
+```csharp
+// By session ID (credit sessions return billing info)
+StopSessionResult result = await client.StopCreditSessionAsync(session.id);
+Debug.Log($"Billed: {result.totalCost} credits for {result.totalHours} hours");
+
+// Auto-route by server type (credit vs subscription)
+await client.StopSessionAsync(session);
+```
+
+### Step 7: Check Your Balance
+
+```csharp
+// Personal credits
+CreditBalance balance = await client.GetCreditBalanceAsync();
+Debug.Log($"Available: {balance.GetAvailableBalance()} credits");
+Debug.Log($"~{balance.GetBalanceInHours(0.25f):F1} hours at 0.25 credits/min");
+
+// Organization credits
+OrgCreditStats orgBalance = await client.GetOrgCreditBalanceAsync();
+Debug.Log($"Org balance: {orgBalance.GetAvailableBalance()}");
+```
+
+## Examples
+
+### List Active Sessions
+
+```csharp
+var sessions = await client.GetMySessionsAsync();
+foreach (var s in sessions)
+{
+    Debug.Log($"[{s.id}] {s.friendlyName ?? s.code} - {s.status} ({s.gameType})");
+    if (s.IsActive())
+        Debug.Log($"  Connect: {s.slaveIp}:{s.GetServerPort()}");
+}
+```
+
+### Schedule a Tournament
+
+```csharp
+DateTime startTime = DateTime.UtcNow.AddHours(1);
+
+for (int i = 0; i < 4; i++)
+{
+    var matchStart = startTime.AddMinutes(i * 40);
+    var matchEnd = matchStart.AddMinutes(30);
+
+    var request = new CreateSessionRequest
+    {
+        gameKey = "your_game_key",
+        isPublic = true,
+        friendlyName = $"Match {i + 1}"
+    };
+    request.SetScheduledStartTime(matchStart);
+    request.SetScheduledEndTime(matchEnd);
+
+    var session = await client.CreateCreditSessionAsync(request);
+    Debug.Log($"Scheduled match {i + 1}: code {session.code}, starts {matchStart:HH:mm}");
+}
+```
+
+### Organization Server Management
+
+```csharp
+// Org API keys auto-scope all requests to the organization
+var client = new SplatterVaultClient("sv_org_your_key", 1);
+
+// Session creation bills to org credits automatically
+var session = await client.CreateCreditSessionAsync(new CreateSessionRequest
+{
+    gameKey = "your_game_key",
+    friendlyName = "Team Practice"
+});
+
+// Check org balance
+var credits = await client.GetOrgCreditBalanceAsync();
+Debug.Log($"Org has {credits.GetAvailableBalance()} credits remaining");
+
+// Check org subscription
+var sub = await client.GetOrgSubscriptionAsync();
+Debug.Log($"Subscription: {sub.current?.tier ?? "none"}");
+```
+
+### Dynamic Game Configuration UI
+
+```csharp
+// Build a settings panel from available arguments
+var args = await client.GetConfigurableArgsAsync("your_game_key");
+var overrides = new Dictionary<string, object>();
+
+foreach (var arg in args)
+{
+    switch (arg.type)
+    {
+        case "select":
+            // Show dropdown with arg.options
+            string selected = ShowDropdown(arg.label, arg.options);
+            overrides[arg.flag] = selected;
+            break;
+
+        case "number":
+            // Show slider with arg.min / arg.max
+            float value = ShowSlider(arg.label, arg.min ?? 0, arg.max ?? 100);
+            overrides[arg.flag] = value.ToString();
+            break;
+
+        case "boolean":
+            // Show toggle
+            bool enabled = ShowToggle(arg.label);
+            overrides[arg.flag] = enabled ? (arg.trueValue ?? "True") : (arg.falseValue ?? "False");
+            break;
+
+        case "text":
+            // Show text input
+            string text = ShowTextField(arg.label);
+            overrides[arg.flag] = text;
+            break;
+    }
+}
+
+// Create session with user's selections
+var request = new CreateSessionRequest { gameKey = "your_game_key" };
+request.SetCustomVariables(overrides);
+var session = await client.CreateCreditSessionAsync(request);
+```
+
+### MST Integration
+
+The SDK includes extension methods for Master Server Toolkit:
+
+```csharp
+using SplatterVault.MST;
+
+// Create server and wait for it to be ready (polls every 5s, up to 5 min)
+MSTServerInfo serverInfo = await client.CreateAndWaitForMSTServer(
+    new CreateSessionRequest { gameKey = "your_game_key", isPublic = true },
+    onProgress: (status) => Debug.Log(status)
+);
+
+// Register with MST
+var roomOptions = new RoomOptions
+{
+    Name = serverInfo.serverName,
+    RoomIp = serverInfo.ipAddress,
+    RoomPort = serverInfo.port,
+    MaxPlayers = serverInfo.maxPlayers,
+    Properties = serverInfo.ToMSTProperties()
+};
+```
 
 ## API Reference
 
 ### SplatterVaultClient
 
-Main client class for API interactions.
-
 #### Constructor
 ```csharp
-// Personal API key
-var client = new SplatterVaultClient("sv_your_key");
-
-// Organization API key with explicit org ID
-var client = new SplatterVaultClient("sv_org_your_key", organizationId: 1);
-
-// Optional: override base URL (defaults to https://splattervault.com/rest)
-var client = new SplatterVaultClient("sv_your_key", baseUrl: "http://localhost:3000/rest");
+new SplatterVaultClient(string apiKey)
+new SplatterVaultClient(string apiKey, int organizationId)
+new SplatterVaultClient(string apiKey, string baseUrl)  // override base URL
 ```
 
 #### Properties
-```csharp
-bool IsOrganizationKey { get; }     // true for sv_org_ keys
-int? OrganizationId { get; set; }   // org ID for org-scoped endpoints
-```
+| Property | Type | Description |
+|----------|------|-------------|
+| `IsOrganizationKey` | `bool` | True for `sv_org_` keys |
+| `OrganizationId` | `int?` | Org ID for org-scoped endpoints |
 
 #### Methods
 
-**CreateCreditSessionAsync**
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `GetConfigurableArgsAsync(gameKey)` | `List<StructuredLaunchArg>` | Get available launch arguments for a game |
+| `CreateCreditSessionAsync(request)` | `GameSession` | Create credit-billed session |
+| `CreateSubscriptionSessionAsync(request)` | `GameSession` | Create subscription-billed session |
+| `GetSessionAsync(sessionId)` | `GameSession` | Get session details |
+| `GetMySessionsAsync()` | `List<GameSession>` | List your sessions |
+| `StopCreditSessionAsync(sessionId)` | `StopSessionResult` | Stop credit session (returns billing) |
+| `StopSubscriptionSessionAsync(sessionId)` | `GameSession` | Stop subscription session |
+| `StopSessionAsync(session)` | `StopSessionResult` | Auto-routes by serverType |
+| `UpdateSessionFriendlyNameAsync(session, name)` | `GameSession` | Rename a session |
+| `UpdateSessionScheduleAsync(session, start, end)` | `GameSession` | Update schedule times |
+| `CancelSessionScheduleAsync(session)` | `GameSession` | Cancel scheduled session |
+| `GetCreditBalanceAsync()` | `CreditBalance` | Get personal credit balance |
+| `GetCreditStatsAsync()` | `CreditStats` | Get detailed credit stats |
+| `GetSubscriptionAsync()` | `SubscriptionDetails` | Get subscription info |
+| `GetUsageStatsAsync()` | `UsageStats` | Get usage statistics |
+| `GetOrgCreditBalanceAsync(orgId?)` | `OrgCreditStats` | Get org credit balance |
+| `GetOrgSubscriptionAsync(orgId?)` | `OrgSubscriptionInfo` | Get org subscription |
+
+All methods also accept optional `Action<T> onSuccess` and `Action<string> onError` callbacks.
+
+### Models
+
+#### CreateSessionRequest
+| Field | Type | Description |
+|-------|------|-------------|
+| `gameKey` | `string` | Game config key (required) |
+| `region` | `string` | Server region (default: "NYC3") |
+| `isPublic` | `bool` | Public visibility (default: false) |
+| `friendlyName` | `string` | Display name |
+| `scheduledStartTime` | `string` | ISO 8601 start time |
+| `scheduledEndTime` | `string` | ISO 8601 auto-stop time |
+| `serverSizeId` | `int?` | Server size (defaults per game) |
+| `organizationId` | `int?` | Org billing (auto-injected for org keys) |
+| `buildId` | `int?` | Specific game build |
+| `customVariables` | `Dictionary<string, object>` | Launch argument overrides |
+
+#### GameSession (response)
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `int` | Session ID |
+| `code` | `string` | Join code |
+| `status` | `string` | Pending, Active, Scheduled, Not Active |
+| `gameType` | `string` | Resolved game type name |
+| `mode` | `string` | Resolved game mode |
+| `region` | `string` | Server region |
+| `slaveIp` | `string` | Server IP address |
+| `slavePort` | `int?` | Server port |
+| `serverType` | `string` | Credit or Subscription |
+| `serverSize` | `ServerSizeInfo` | Size details with creditsPerMinute |
+| `friendlyName` | `string` | Display name |
+| `organizationId` | `int?` | Owning organization |
+
+**Helpers:** `IsActive()`, `IsPending()`, `IsScheduled()`, `IsStopped()`, `GetServerPort()`, `GetScheduledStartTime()`, `GetScheduledEndTime()`
+
+#### StructuredLaunchArg
+| Field | Type | Description |
+|-------|------|-------------|
+| `flag` | `string` | Argument flag (e.g., "-maxPlayers") |
+| `type` | `string` | text, number, boolean, select, hidden |
+| `label` | `string` | Display label |
+| `description` | `string` | Help text |
+| `required` | `bool` | Must be provided |
+| `options` | `List<SelectOption>` | Choices for select type |
+| `min` / `max` | `float?` | Range for number type |
+| `semantic` | `string` | Hint: "mode", "password", "serverName" |
+
+### Regions
+
 ```csharp
-public async Task<GameSession> CreateCreditSessionAsync(
-    CreateSessionRequest request,
-    Action<GameSession> onSuccess = null,
-    Action<string> onError = null
-)
+Region.NYC1   // New York 1
+Region.NYC3   // New York 3
+Region.TOR1   // Toronto
+Region.SFO1   // San Francisco 1
+Region.SFO2   // San Francisco 2
+Region.SFO3   // San Francisco 3
+Region.LON1   // London
 ```
 
-**CreateSubscriptionSessionAsync**
-```csharp
-public async Task<GameSession> CreateSubscriptionSessionAsync(
-    CreateSessionRequest request,
-    Action<GameSession> onSuccess = null,
-    Action<string> onError = null
-)
-```
+## Error Handling
 
-**GetSessionAsync**
-```csharp
-public async Task<GameSession> GetSessionAsync(
-    int sessionId,
-    Action<GameSession> onSuccess = null,
-    Action<string> onError = null
-)
-```
-
-**GetMySessionsAsync**
-```csharp
-public async Task<List<GameSession>> GetMySessionsAsync(
-    Action<List<GameSession>> onSuccess = null,
-    Action<string> onError = null
-)
-```
-
-**StopSessionAsync**
-```csharp
-public async Task<bool> StopSessionAsync(
-    int sessionId,
-    Action<bool> onSuccess = null,
-    Action<string> onError = null
-)
-```
-
-**GetCreditBalanceAsync**
-```csharp
-public async Task<CreditBalance> GetCreditBalanceAsync(
-    Action<CreditBalance> onSuccess = null,
-    Action<string> onError = null
-)
-```
-
-## Examples
-
-### Example 1: Create a Session with Auto-Stop
+All SDK methods throw exceptions on failure. Use try/catch or the callback pattern:
 
 ```csharp
-var request = new CreateSessionRequest
+// Try/catch pattern
+try
 {
-    region = "NYC3",
-    gameType = "PaintballPlayground",
-    mode = "XBall",
-    isPublic = false,
-    friendlyName = "Practice Session",
-    scheduledEndTime = DateTime.UtcNow.AddHours(2) // Auto-stop in 2 hours
-};
-
-await client.CreateCreditSessionAsync(request, 
-    onSuccess: (session) => {
-        Debug.Log($"Session will auto-stop at {session.scheduledEndTime}");
-    },
-    onError: (error) => {
-        Debug.LogError(error);
-    }
-);
-```
-
-### Example 2: Create a Scheduled Session
-
-```csharp
-var request = new CreateSessionRequest
-{
-    region = "NYC3",
-    gameType = "PaintballPlayground",
-    mode = "XBall",
-    isPublic = true,
-    friendlyName = "Tournament Match",
-    scheduledStartTime = DateTime.UtcNow.AddHours(1), // Start in 1 hour
-    scheduledEndTime = DateTime.UtcNow.AddHours(3)    // End 2 hours after start
-};
-
-await client.CreateSubscriptionSessionAsync(request);
-```
-
-### Example 3: List and Monitor Sessions
-
-```csharp
-var sessions = await client.GetMySessionsAsync();
-
-foreach (var session in sessions)
-{
-    Debug.Log($"{session.friendlyName ?? session.code}: {session.status}");
-    
-    if (session.status == "Active")
-    {
-        // Join this session
-        JoinGameSession(session.code);
-    }
+    var session = await client.CreateCreditSessionAsync(request);
 }
-```
-
-### Example 4: Check Credits Before Creating Session
-
-```csharp
-var credits = await client.GetCreditBalanceAsync();
-
-if (credits.balance >= 60) // 60 credits = 1 hour
+catch (Exception ex)
 {
-    await client.CreateCreditSessionAsync(new CreateSessionRequest
-    {
-        region = "NYC3",
-        gameType = "PaintballPlayground",
-        friendlyName = "Quick Match"
-    });
+    // ex.Message contains: "API Error (403): Insufficient credits to start a session"
+    Debug.LogError(ex.Message);
 }
-else
-{
-    Debug.LogWarning("Insufficient credits!");
-}
-```
 
-### Example 5: Organization API Key
-
-```csharp
-// Org API keys auto-scope all requests to the organization
-var client = new SplatterVaultClient("sv_org_your_key_here", 1);
-
-// Create a session billed to org credits
-var session = await client.CreateCreditSessionAsync(new CreateSessionRequest
-{
-    region = "NYC3",
-    gameType = "PaintballPlayground",
-    mode = "XBall",
-    friendlyName = "Org Practice Server"
-});
-
-// Check org credit balance
-var orgCredits = await client.GetOrgCreditBalanceAsync();
-Debug.Log($"Org balance: {orgCredits.GetAvailableBalance()}");
-
-// List all org sessions (fetches from both credit + subscription endpoints)
-var sessions = await client.GetMySessionsAsync();
-Debug.Log($"Org has {sessions.Count} sessions");
-```
-
-### Example 6: Using Custom Game Type Configurations
-
-```csharp
-// Create a session with a custom game type configuration
-var request = new CreateSessionRequest();
-request.SetRegion(Region.NYC3);
-
-// Use your custom game type config key (obtained from dashboard)
-request.SetGameTypeConfigKey("usr_123_abc456xyz");
-
-// Set custom variables defined in your game type config
-request.AddCustomVariable("MAP_NAME", "desert_arena");
-request.AddCustomVariable("MAX_ROUNDS", 10);
-request.AddCustomVariable("DIFFICULTY", "hard");
-
-request.isPublic = true;
-request.friendlyName = "Custom Map Tournament";
-
+// Callback pattern
 await client.CreateCreditSessionAsync(request,
-    onSuccess: (session) => {
-        Debug.Log($"Custom session created! Join code: {session.code}");
-    }
+    onSuccess: (session) => Debug.Log($"Created: {session.code}"),
+    onError: (error) => Debug.LogError(error)
 );
 ```
 
-### Example 7: Custom Variables with Dictionary
-
-```csharp
-var request = new CreateSessionRequest();
-request.SetGameTypeConfigKey("usr_123_abc456xyz");
-
-// Set multiple variables at once
-var variables = new Dictionary<string, object>
-{
-    { "MAP_NAME", "forest_battle" },
-    { "GAME_MODE", "capture_the_flag" },
-    { "TIME_LIMIT", 1800 }, // 30 minutes in seconds
-    { "FRIENDLY_FIRE", false }
-};
-
-request.SetCustomVariables(variables);
-request.SetRegion(Region.NYC3);
-request.isPublic = false;
-
-await client.CreateSubscriptionSessionAsync(request);
-```
-
-## Models
-
-### CreateSessionRequest
-```csharp
-public class CreateSessionRequest
-{
-    public string region;              // "NYC3", "TOR1", "SFO1", "LON1"
-    public string gameType;            // "PaintballPlayground", "Snapshot", etc.
-    public string mode;                // "XBall", "NXL", etc.
-    public bool isPublic;              // true for public, false for private
-    public string friendlyName;        // Optional custom name
-    public DateTime? scheduledStartTime; // Optional scheduled start
-    public DateTime? scheduledEndTime;   // Optional auto-stop time
-    
-    // Custom Game Type Configuration Support (NEW)
-    public string gameTypeConfigKey;   // Optional: unique key for custom game type
-    public Dictionary<string, object> customVariables; // Optional: custom variable values
-    
-    // Helper Methods
-    void SetGameTypeConfigKey(string configKey);
-    void AddCustomVariable(string name, object value);
-    void SetCustomVariables(Dictionary<string, object> variables);
-    void ClearCustomVariables();
-}
-```
-
-### GameSession
-```csharp
-public class GameSession
-{
-    public int id;
-    public string code;
-    public string serverName;
-    public string friendlyName;
-    public string status;              // "Pending", "Active", "Scheduled", etc.
-    public string gameType;
-    public string region;
-    public string mode;
-    public bool isPublic;
-    public DateTime? scheduledStartTime;
-    public DateTime? scheduledEndTime;
-    public DateTime serverStart;
-}
-```
-
-### CreditBalance
-```csharp
-public class CreditBalance
-{
-    public int balance;
-    public int totalPurchased;
-    public int totalUsed;
-}
-```
-
-## Custom Game Type Configurations
-
-The SDK now supports custom game type configurations, allowing you to define your own game types with custom variables that can be used in server launch arguments, environment variables, and configuration files.
-
-### Getting Started with Custom Configurations
-
-1. **Request Access**: Use the dashboard to request permission to create custom game types
-2. **Create Configuration**: Once approved, create your custom game type with variables
-3. **Get Unique Key**: Copy your unique game type config key (e.g., `usr_123_abc456xyz`)
-4. **Use in SDK**: Pass the key and variable values when creating sessions
-
-### Custom Variables
-
-Custom variables allow you to parameterize your server configurations. Common use cases:
-
-- **Map Selection**: Let users choose which map to load
-- **Game Modes**: Define custom game mode variations
-- **Server Settings**: Control difficulty, time limits, player counts, etc.
-- **Feature Flags**: Enable/disable specific features
-
-### Example: Map Selection System
-
-```csharp
-// Your custom game type config defines these variables:
-// - MAP_NAME (select): "Desert Arena", "Forest Battle", "Urban Combat"
-// - MAX_PLAYERS (number): 8-32
-// - FRIENDLY_FIRE (boolean): true/false
-
-var request = new CreateSessionRequest();
-request.SetGameTypeConfigKey("usr_123_abc456xyz");
-
-// User selects options in your UI
-request.AddCustomVariable("MAP_NAME", selectedMap);
-request.AddCustomVariable("MAX_PLAYERS", playerCount);
-request.AddCustomVariable("FRIENDLY_FIRE", friendlyFireEnabled);
-
-await client.CreateCreditSessionAsync(request);
-```
-
-### Backward Compatibility
-
-The new custom configuration fields are completely optional. Existing code continues to work:
-
-```csharp
-// Legacy approach - still works!
-var request = new CreateSessionRequest
-{
-    gameType = "PaintballPlayground",
-    mode = "XBall",
-    region = "NYC3"
-};
-```
-
-## Best Practices
-
-1. **Store API Key Securely**
-   - Don't hardcode API keys in your scripts
-   - Use Unity's PlayerPrefs or a config file
-   - Never commit API keys to version control
-
-2. **Error Handling**
-   - Always provide error callbacks
-   - Show user-friendly error messages
-   - Log errors for debugging
-
-3. **Session Management**
-   - Stop sessions when done to save credits
-   - Use auto-stop times to prevent forgotten sessions
-   - Cache session data to avoid redundant API calls
-
-4. **Performance**
-   - Don't poll the API too frequently
-   - Use the session code to connect to servers
-   - Cache session lists and refresh only when needed
+**Common errors:**
+| Code | Meaning |
+|------|---------|
+| 401 | Invalid or expired API key |
+| 403 | Insufficient credits or permissions |
+| 404 | Session or game config not found |
+| 500 | Server error (report to support) |
 
 ## Troubleshooting
 
-### "Unauthorized" Error
-- Check that your API key is correct and approved
-- Verify the API key has not been revoked
+### "API key is required"
+Set your API key before creating the client. Don't commit keys to version control.
 
-### "Insufficient Credits" Error
-- Check your credit balance with `GetCreditBalanceAsync()`
-- Purchase more credits through the dashboard
+### "Game type configuration not found"
+Your `gameKey` doesn't match an active config. Check it on your dashboard.
 
-### "Connection Failed" Error
-- Verify internet connectivity
-- Check that the API URL is correct
-- Ensure firewall/antivirus isn't blocking Unity
+### "Insufficient credits"
+Check balance with `GetCreditBalanceAsync()`. Purchase credits on the dashboard.
+
+### IL2CPP Builds (iOS/Android)
+Add a `link.xml` to prevent code stripping:
+```xml
+<linker>
+  <assembly fullname="Newtonsoft.Json" preserve="all"/>
+  <assembly fullname="SplatterVault.Runtime" preserve="all"/>
+</linker>
+```
 
 ## Support
 
-For issues or questions:
-- Check the [API Documentation](https://splattervault.com/#/api-docs)
-- Report bugs via `/reportbug` in Discord
-- Contact support
+- Dashboard: [splattervault.com](https://splattervault.com)
+- Report bugs: `/reportbug` in Discord
+- API docs: [splattervault.com/#/api-docs](https://splattervault.com/#/api-docs)
 
 ## License
 
-This SDK is provided as-is for use with the SplatterVault platform.
+MIT License. See [LICENSE.md](LICENSE.md) for details.

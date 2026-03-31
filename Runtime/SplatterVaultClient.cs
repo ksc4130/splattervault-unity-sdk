@@ -613,6 +613,35 @@ namespace SplatterVault
 
         #endregion
 
+        #region Game Configuration
+
+        /// <summary>
+        /// Get the user-configurable launch arguments for a game.
+        /// Use this to build dynamic UI for game-specific options (mode, max players, etc.).
+        /// </summary>
+        /// <param name="gameKey">Game config key (e.g., "sys_1774636058786_30e0fc4d")</param>
+        public async Task<List<StructuredLaunchArg>> GetConfigurableArgsAsync(
+            string gameKey,
+            Action<List<StructuredLaunchArg>> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                string response = await GetAsync($"/game-types/{gameKey}/configurable-args");
+                List<StructuredLaunchArg> args = JsonConvert.DeserializeObject<List<StructuredLaunchArg>>(response, SerializerSettings)
+                    ?? new List<StructuredLaunchArg>();
+                onSuccess?.Invoke(args);
+                return args;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        #endregion
+
         #region HTTP Methods
 
         private async Task<string> GetAsync(string endpoint)

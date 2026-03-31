@@ -17,8 +17,10 @@ public class SimpleSessionManager : MonoBehaviour
     [SerializeField] private int organizationId = 0;
 
     [SerializeField] private Region region = Region.NYC3;
-    [SerializeField] private GameType gameType = GameType.PaintballPlayground;
-    [SerializeField] private PaintballMode paintballMode = PaintballMode.XBall;
+
+    [Tooltip("Game config key from your SplatterVault dashboard")]
+    [SerializeField] private string gameKey = "your_game_key_here";
+
     [SerializeField] private bool isPublic = false;
 
     [Header("Session Info")]
@@ -68,12 +70,11 @@ public class SimpleSessionManager : MonoBehaviour
 
             var request = new CreateSessionRequest
             {
+                gameKey = this.gameKey,
                 isPublic = this.isPublic,
                 friendlyName = $"Unity Game - {DateTime.Now:HH:mm}"
             };
             request.SetRegion(this.region);
-            request.SetGameType(this.gameType);
-            request.SetPaintballMode(this.paintballMode);
 
             activeSession = await client.CreateCreditSessionAsync(request);
 
@@ -111,12 +112,11 @@ public class SimpleSessionManager : MonoBehaviour
 
             var request = new CreateSessionRequest
             {
+                gameKey = this.gameKey,
                 isPublic = this.isPublic,
                 friendlyName = "Practice Match"
             };
             request.SetRegion(this.region);
-            request.SetGameType(this.gameType);
-            request.SetPaintballMode(this.paintballMode);
 
             // Set auto-stop time to 2 hours from now
             request.SetScheduledEndTime(DateTime.UtcNow.AddHours(2));

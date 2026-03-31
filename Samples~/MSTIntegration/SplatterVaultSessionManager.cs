@@ -41,12 +41,9 @@ public class SplatterVaultSessionManager : MonoBehaviour
     [Header("Game Settings")]
     [Tooltip("Server region")]
     [SerializeField] private Region region = Region.NYC3;
-    
-    [Tooltip("Game type")]
-    [SerializeField] private GameType gameType = GameType.PaintballPlayground;
-    
-    [Tooltip("Game mode")]
-    [SerializeField] private PaintballMode gameMode = PaintballMode.XBall;
+
+    [Tooltip("Game config key from your SplatterVault dashboard")]
+    [SerializeField] private string gameKey = "your_game_key_here";
     
     [Tooltip("Maximum players")]
     [SerializeField] private int maxPlayers = 10;
@@ -203,12 +200,11 @@ public class SplatterVaultSessionManager : MonoBehaviour
             // Create request
             var request = new CreateSessionRequest
             {
+                gameKey = this.gameKey,
                 friendlyName = friendlyName ?? $"Game {DateTime.Now:HH:mm}",
                 isPublic = isPublic
             };
             request.SetRegion(region);
-            request.SetGameType(gameType);
-            request.SetPaintballMode(gameMode);
 
             // Create and wait for server
             SetState(SessionState.Starting);
@@ -404,8 +400,7 @@ public class SplatterVaultSessionManager : MonoBehaviour
                 Properties = new Dictionary<string, string>
                 {
                     { "serverCode", session.code },
-                    { "gameType", gameType.ToString() },
-                    { "mode", gameMode.ToString() },
+                    { "gameKey", gameKey },
                     { "region", region.ToString() },
                     { "sessionId", session.sessionId.ToString() }
                 }
@@ -435,8 +430,7 @@ public class SplatterVaultSessionManager : MonoBehaviour
                 { "ipAddress", session.ipAddress },
                 { "port", session.port.ToString() },
                 { "maxPlayers", maxPlayers.ToString() },
-                { "gameType", gameType.ToString() },
-                { "mode", gameMode.ToString() }
+                { "gameKey", gameKey }
             }
         };
 
