@@ -17,6 +17,8 @@ namespace SplatterVault
         private readonly string baseUrl;
         private readonly bool isOrgKey;
         private int? organizationId;
+        private bool _isInitialized;
+        private AuthContext _authContext;
 
         /// <summary>
         /// Whether this client is using an organization API key (sv_org_ prefix)
@@ -32,6 +34,11 @@ namespace SplatterVault
             get => organizationId;
             set => organizationId = value;
         }
+
+        /// <summary>
+        /// The resolved authentication context (available after InitializeAsync or CreateAsync).
+        /// </summary>
+        public AuthContext AuthContext => _authContext;
 
         /// <summary>
         /// Initialize the SplatterVault client
@@ -57,6 +64,52 @@ namespace SplatterVault
             : this(apiKey, baseUrl)
         {
             this.organizationId = organizationId;
+        }
+
+        /// <summary>
+        /// Initialize the client by resolving auth context from the server.
+        /// For org API keys, this auto-resolves the organization ID so you never need to provide it.
+        /// </summary>
+        public async Task<AuthContext> InitializeAsync()
+        {
+            string response = await GetAsync("/auth/me");
+            _authContext = Deserialize<AuthContext>(response);
+
+            if (_authContext.organizationId.HasValue && !organizationId.HasValue)
+                organizationId = _authContext.organizationId.Value;
+
+            _isInitialized = true;
+            return _authContext;
+        }
+
+        /// <summary>
+        /// Create and initialize a SplatterVault client in one step.
+        /// For org API keys, the organization ID is auto-resolved — no need to provide it.
+        /// </summary>
+        public static async Task<SplatterVaultClient> CreateAsync(
+            string apiKey,
+            string baseUrl = "https://splattervault.com/rest")
+        {
+            var client = new SplatterVaultClient(apiKey, baseUrl);
+            await client.InitializeAsync();
+            return client;
+        }
+
+        /// <summary>
+        /// Create a game session, routing to the correct endpoint based on serverType.
+        /// Defaults to credit-based sessions.
+        /// </summary>
+        /// <param name="request">Session creation parameters</param>
+        /// <param name="serverType">"Credit" or "Subscription"</param>
+        public async Task<GameSession> CreateSessionAsync(
+            CreateSessionRequest request,
+            string serverType = "Credit",
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            if (serverType == "Subscription")
+                return await CreateSubscriptionSessionAsync(request, onSuccess, onError);
+            return await CreateCreditSessionAsync(request, onSuccess, onError);
         }
 
         #region Session Management
@@ -564,8 +617,15 @@ namespace SplatterVault
         {
             try
             {
-                int resolvedOrgId = ResolveOrgId(orgId);
-                string response = await GetAsync($"/organizations/{resolvedOrgId}/credits");
+                int? resolved = orgId ?? organizationId;
+                string response;
+                if (resolved.HasValue)
+                    response = await GetAsync($"/organizations/{resolved.Value}/credits");
+                else if (isOrgKey)
+                    response = await GetAsync("/org/credits");
+                else
+                    throw new InvalidOperationException(
+                        "Organization ID required. Use CreateAsync() to auto-resolve, set OrganizationId, or pass orgId explicitly.");
                 OrgCreditStats stats = Deserialize<OrgCreditStats>(response);
                 onSuccess?.Invoke(stats);
                 return stats;
@@ -589,8 +649,15 @@ namespace SplatterVault
         {
             try
             {
-                int resolvedOrgId = ResolveOrgId(orgId);
-                string response = await GetAsync($"/organizations/{resolvedOrgId}/subscription");
+                int? resolved = orgId ?? organizationId;
+                string response;
+                if (resolved.HasValue)
+                    response = await GetAsync($"/organizations/{resolved.Value}/subscription");
+                else if (isOrgKey)
+                    response = await GetAsync("/org/subscription");
+                else
+                    throw new InvalidOperationException(
+                        "Organization ID required. Use CreateAsync() to auto-resolve, set OrganizationId, or pass orgId explicitly.");
                 OrgSubscriptionInfo info = Deserialize<OrgSubscriptionInfo>(response);
                 onSuccess?.Invoke(info);
                 return info;
@@ -607,7 +674,7 @@ namespace SplatterVault
             int? resolved = orgId ?? organizationId;
             if (!resolved.HasValue)
                 throw new InvalidOperationException(
-                    "Organization ID required. Set it via the constructor or OrganizationId property, or pass it explicitly.");
+                    "Organization ID not resolved. Use CreateAsync() to auto-resolve, set OrganizationId, or pass orgId explicitly.");
             return resolved.Value;
         }
 

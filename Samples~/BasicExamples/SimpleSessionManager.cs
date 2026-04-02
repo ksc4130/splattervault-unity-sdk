@@ -13,9 +13,6 @@ public class SimpleSessionManager : MonoBehaviour
     [Tooltip("Your SplatterVault API key (sv_... for personal, sv_org_... for organization)")]
     [SerializeField] private string apiKey = "sv_your_api_key_here";
 
-    [Tooltip("Organization ID (required for org API keys to use org credit/subscription endpoints)")]
-    [SerializeField] private int organizationId = 0;
-
     [SerializeField] private Region region = Region.NYC3;
 
     [Tooltip("Game config key from your SplatterVault dashboard")]
@@ -31,24 +28,26 @@ public class SimpleSessionManager : MonoBehaviour
     private SplatterVaultClient client;
     private GameSession activeSession;
 
-    void Start()
+    async void Start()
     {
-        // Initialize the client
         if (string.IsNullOrEmpty(apiKey) || apiKey == "sv_your_api_key_here")
         {
             Debug.LogError("Please set your API key in the inspector!");
             return;
         }
 
-        if (organizationId > 0)
+        try
         {
-            client = new SplatterVaultClient(apiKey, organizationId);
-            Debug.Log($"SplatterVault client initialized (org key: {client.IsOrganizationKey}, orgId: {organizationId})");
-        }
-        else
-        {
-            client = new SplatterVaultClient(apiKey);
+            // CreateAsync auto-resolves org ID for org API keys
+            client = await SplatterVaultClient.CreateAsync(apiKey);
             Debug.Log($"SplatterVault client initialized (org key: {client.IsOrganizationKey})");
+
+            if (client.AuthContext?.organizationId != null)
+                Debug.Log($"  Organization: {client.AuthContext.organizationName} (ID: {client.AuthContext.organizationId})");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Failed to initialize client: {ex.Message}");
         }
     }
 

@@ -88,14 +88,18 @@ Debug.Log($"Cost: {result.totalCost} credits ({result.totalHours} hours)");
 ```csharp
 using SplatterVault;
 
-// Personal API key
-var client = new SplatterVaultClient("sv_your_api_key");
+// Recommended: CreateAsync auto-resolves org ID for org keys
+var client = await SplatterVaultClient.CreateAsync("sv_your_api_key");
 
-// Organization API key with org ID
-var client = new SplatterVaultClient("sv_org_your_key", organizationId: 1);
+// Organization API key — org ID is auto-resolved, no need to provide it
+var client = await SplatterVaultClient.CreateAsync("sv_org_your_key");
 
 // Custom API URL (for local development)
-var client = new SplatterVaultClient("sv_your_key", baseUrl: "http://localhost:3000/rest");
+var client = await SplatterVaultClient.CreateAsync("sv_your_key",
+    baseUrl: "http://localhost:3000/rest");
+
+// Manual initialization (if you prefer constructor + explicit org ID)
+var client = new SplatterVaultClient("sv_org_your_key", organizationId: 1);
 ```
 
 ### Step 3: Discover Game Options
@@ -236,8 +240,9 @@ for (int i = 0; i < 4; i++)
 ### Organization Server Management
 
 ```csharp
-// Org API keys auto-scope all requests to the organization
-var client = new SplatterVaultClient("sv_org_your_key", 1);
+// CreateAsync auto-resolves org ID — no need to provide it
+var client = await SplatterVaultClient.CreateAsync("sv_org_your_key");
+Debug.Log($"Organization: {client.AuthContext.organizationName}");
 
 // Session creation bills to org credits automatically
 var session = await client.CreateCreditSessionAsync(new CreateSessionRequest
@@ -246,11 +251,11 @@ var session = await client.CreateCreditSessionAsync(new CreateSessionRequest
     friendlyName = "Team Practice"
 });
 
-// Check org balance
+// Check org balance (org ID auto-resolved)
 var credits = await client.GetOrgCreditBalanceAsync();
 Debug.Log($"Org has {credits.GetAvailableBalance()} credits remaining");
 
-// Check org subscription
+// Check org subscription (org ID auto-resolved)
 var sub = await client.GetOrgSubscriptionAsync();
 Debug.Log($"Subscription: {sub.current?.tier ?? "none"}");
 ```
@@ -326,11 +331,16 @@ var roomOptions = new RoomOptions
 
 ### SplatterVaultClient
 
-#### Constructor
+#### Constructor & Factory
 ```csharp
+// Recommended: auto-resolves org ID for org keys
+await SplatterVaultClient.CreateAsync(string apiKey)
+await SplatterVaultClient.CreateAsync(string apiKey, string baseUrl)
+
+// Manual construction (org ID must be set separately for org-scoped endpoints)
 new SplatterVaultClient(string apiKey)
 new SplatterVaultClient(string apiKey, int organizationId)
-new SplatterVaultClient(string apiKey, string baseUrl)  // override base URL
+new SplatterVaultClient(string apiKey, string baseUrl)
 ```
 
 #### Properties
@@ -338,11 +348,14 @@ new SplatterVaultClient(string apiKey, string baseUrl)  // override base URL
 |----------|------|-------------|
 | `IsOrganizationKey` | `bool` | True for `sv_org_` keys |
 | `OrganizationId` | `int?` | Org ID for org-scoped endpoints |
+| `AuthContext` | `AuthContext` | Resolved auth context (after `InitializeAsync`/`CreateAsync`) |
 
 #### Methods
 
 | Method | Returns | Description |
 |--------|---------|-------------|
+| `InitializeAsync()` | `AuthContext` | Resolve auth context; auto-sets org ID for org keys |
+| `CreateSessionAsync(request, serverType)` | `GameSession` | Create session (routes by serverType, default "Credit") |
 | `GetConfigurableArgsAsync(gameKey)` | `List<StructuredLaunchArg>` | Get available launch arguments for a game |
 | `CreateCreditSessionAsync(request)` | `GameSession` | Create credit-billed session |
 | `CreateSubscriptionSessionAsync(request)` | `GameSession` | Create subscription-billed session |

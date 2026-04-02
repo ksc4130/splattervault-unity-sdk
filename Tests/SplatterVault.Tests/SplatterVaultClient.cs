@@ -18,6 +18,8 @@ namespace SplatterVault
         private readonly bool isOrgKey;
         private readonly HttpClient http;
         private int? organizationId;
+        private bool _isInitialized;
+        private AuthContext _authContext;
 
         public bool IsOrganizationKey => isOrgKey;
 
@@ -26,6 +28,8 @@ namespace SplatterVault
             get => organizationId;
             set => organizationId = value;
         }
+
+        public AuthContext AuthContext => _authContext;
 
         private static readonly JsonSerializerSettings SerializerSettings = new()
         {
@@ -52,26 +56,84 @@ namespace SplatterVault
             this.organizationId = organizationId;
         }
 
-        #region Session Management
-
-        public async Task<GameSession> CreateCreditSessionAsync(CreateSessionRequest request)
+        public async Task<AuthContext> InitializeAsync()
         {
-            if (isOrgKey && organizationId.HasValue && !request.organizationId.HasValue)
-                request.organizationId = organizationId.Value;
+            string response = await GetAsync("/auth/me");
+            _authContext = Deserialize<AuthContext>(response);
 
-            string json = JsonConvert.SerializeObject(request, SerializerSettings);
-            string response = await PostAsync("/credits/sessions", json);
-            return Deserialize<GameSession>(response);
+            if (_authContext.organizationId.HasValue && !organizationId.HasValue)
+                organizationId = _authContext.organizationId.Value;
+
+            _isInitialized = true;
+            return _authContext;
         }
 
-        public async Task<GameSession> CreateSubscriptionSessionAsync(CreateSessionRequest request)
+        public static async Task<SplatterVaultClient> CreateAsync(
+            string apiKey,
+            string baseUrl = "https://splattervault.com/rest")
         {
-            if (isOrgKey && organizationId.HasValue && !request.organizationId.HasValue)
-                request.organizationId = organizationId.Value;
+            var client = new SplatterVaultClient(apiKey, baseUrl);
+            await client.InitializeAsync();
+            return client;
+        }
 
-            string json = JsonConvert.SerializeObject(request, SerializerSettings);
-            string response = await PostAsync("/subscriptions/sessions", json);
-            return Deserialize<GameSession>(response);
+        public async Task<GameSession> CreateSessionAsync(
+            CreateSessionRequest request,
+            string serverType = "Credit",
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            if (serverType == "Subscription")
+                return await CreateSubscriptionSessionAsync(request, onSuccess, onError);
+            return await CreateCreditSessionAsync(request, onSuccess, onError);
+        }
+
+        #region Session Management
+
+        public async Task<GameSession> CreateCreditSessionAsync(
+            CreateSessionRequest request,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                if (isOrgKey && organizationId.HasValue && !request.organizationId.HasValue)
+                    request.organizationId = organizationId.Value;
+
+                string json = JsonConvert.SerializeObject(request, SerializerSettings);
+                string response = await PostAsync("/credits/sessions", json);
+                GameSession session = Deserialize<GameSession>(response);
+                onSuccess?.Invoke(session);
+                return session;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
+        }
+
+        public async Task<GameSession> CreateSubscriptionSessionAsync(
+            CreateSessionRequest request,
+            Action<GameSession> onSuccess = null,
+            Action<string> onError = null)
+        {
+            try
+            {
+                if (isOrgKey && organizationId.HasValue && !request.organizationId.HasValue)
+                    request.organizationId = organizationId.Value;
+
+                string json = JsonConvert.SerializeObject(request, SerializerSettings);
+                string response = await PostAsync("/subscriptions/sessions", json);
+                GameSession session = Deserialize<GameSession>(response);
+                onSuccess?.Invoke(session);
+                return session;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
         }
 
         public async Task<GameSession> GetSessionAsync(int sessionId)
@@ -257,18 +319,58 @@ namespace SplatterVault
 
         #region Organization
 
-        public async Task<OrgCreditStats> GetOrgCreditBalanceAsync(int? orgId = null)
+        public async Task<OrgCreditStats> GetOrgCreditBalanceAsync(
+            int? orgId = null,
+            Action<OrgCreditStats> onSuccess = null,
+            Action<string> onError = null)
         {
-            int resolvedOrgId = ResolveOrgId(orgId);
-            string response = await GetAsync($"/organizations/{resolvedOrgId}/credits");
-            return Deserialize<OrgCreditStats>(response);
+            try
+            {
+                int? resolved = orgId ?? organizationId;
+                string response;
+                if (resolved.HasValue)
+                    response = await GetAsync($"/organizations/{resolved.Value}/credits");
+                else if (isOrgKey)
+                    response = await GetAsync("/org/credits");
+                else
+                    throw new InvalidOperationException(
+                        "Organization ID required. Use CreateAsync() to auto-resolve, set OrganizationId, or pass orgId explicitly.");
+                OrgCreditStats stats = Deserialize<OrgCreditStats>(response);
+                onSuccess?.Invoke(stats);
+                return stats;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
         }
 
-        public async Task<OrgSubscriptionInfo> GetOrgSubscriptionAsync(int? orgId = null)
+        public async Task<OrgSubscriptionInfo> GetOrgSubscriptionAsync(
+            int? orgId = null,
+            Action<OrgSubscriptionInfo> onSuccess = null,
+            Action<string> onError = null)
         {
-            int resolvedOrgId = ResolveOrgId(orgId);
-            string response = await GetAsync($"/organizations/{resolvedOrgId}/subscription");
-            return Deserialize<OrgSubscriptionInfo>(response);
+            try
+            {
+                int? resolved = orgId ?? organizationId;
+                string response;
+                if (resolved.HasValue)
+                    response = await GetAsync($"/organizations/{resolved.Value}/subscription");
+                else if (isOrgKey)
+                    response = await GetAsync("/org/subscription");
+                else
+                    throw new InvalidOperationException(
+                        "Organization ID required. Use CreateAsync() to auto-resolve, set OrganizationId, or pass orgId explicitly.");
+                OrgSubscriptionInfo info = Deserialize<OrgSubscriptionInfo>(response);
+                onSuccess?.Invoke(info);
+                return info;
+            }
+            catch (Exception ex)
+            {
+                onError?.Invoke(ex.Message);
+                throw;
+            }
         }
 
         private int ResolveOrgId(int? orgId)
@@ -276,7 +378,7 @@ namespace SplatterVault
             int? resolved = orgId ?? organizationId;
             if (!resolved.HasValue)
                 throw new InvalidOperationException(
-                    "Organization ID required. Set it via the constructor or OrganizationId property, or pass it explicitly.");
+                    "Organization ID not resolved. Use CreateAsync() to auto-resolve, set OrganizationId, or pass orgId explicitly.");
             return resolved.Value;
         }
 

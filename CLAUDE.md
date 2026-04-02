@@ -75,6 +75,13 @@ All requests use API key authentication via `X-API-Key` header (not JWT Bearer t
 - `GET /organizations/{orgId}/credits` — Org credit balance
 - `GET /organizations/{orgId}/subscription` — Org subscription info
 
+### Auth Context
+- `GET /auth/me` — Resolve authenticated caller's context (org ID, permissions for org keys; user info for user keys)
+
+### Organization (org-key-friendly aliases)
+- `GET /org/credits` — Org credit balance (no org ID needed in URL for org API keys)
+- `GET /org/subscription` — Org subscription info (no org ID needed in URL for org API keys)
+
 ### Game Configuration
 
 - `GET /game-types/{gameKey}/configurable-args` — Discoverable launch arguments (type, options, min/max, validation)
@@ -95,7 +102,7 @@ All requests use API key authentication via `X-API-Key` header (not JWT Bearer t
 Uses API key auth (`X-API-Key` header), NOT JWT Bearer tokens:
 
 - **Personal keys**: `sv_...` prefix — bills to personal credits
-- **Organization keys**: `sv_org_...` prefix — auto-detected via `StartsWith("sv_org_")`, auto-injects `organizationId` on session creation
+- **Organization keys**: `sv_org_...` prefix — auto-detected via `StartsWith("sv_org_")`, auto-injects `organizationId` on session creation. Use `CreateAsync()` to auto-resolve org ID from the key via `GET /auth/me`.
 
 The API key middleware in ppg-vpl API resolves the key to a user context server-side. This is different from how ppds-ux and vpl-ux authenticate (which use JWT from login flow).
 

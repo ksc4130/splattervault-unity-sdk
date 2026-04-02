@@ -5,6 +5,26 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-04-02
+
+### Added
+- `CreateAsync(apiKey, baseUrl)` — static factory that auto-resolves organization ID for org API keys via `GET /auth/me`
+- `InitializeAsync()` — resolves auth context from the server, auto-sets `organizationId` for org keys
+- `AuthContext` property — exposes the resolved auth context (type, organizationId, permissions, etc.)
+- `CreateSessionAsync(request, serverType)` — unified session creation that routes to credit or subscription endpoint
+- `AuthContext` model class for the `/auth/me` response
+
+### Changed
+- `GetOrgCreditBalanceAsync` now falls back to `/org/credits` for org API keys when org ID is not explicitly set
+- `GetOrgSubscriptionAsync` now falls back to `/org/subscription` for org API keys when org ID is not explicitly set
+- Updated `ResolveOrgId` error message to suggest `CreateAsync()` for auto-resolution
+- Updated `SimpleSessionManager` sample to use `CreateAsync` pattern
+
+### Developer Experience
+- **Org API key users no longer need to know or provide their organization ID** — `CreateAsync` handles it automatically
+- Before: `new SplatterVaultClient("sv_org_key", orgId: 42)`
+- After: `await SplatterVaultClient.CreateAsync("sv_org_key")`
+
 ## [3.0.0] - 2026-03-31
 
 ### Breaking Changes

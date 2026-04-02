@@ -421,4 +421,21 @@ namespace SplatterVault
         public string message;
         public GameSession session;
     }
+
+    /// <summary>
+    /// Authentication context returned by GET /auth/me.
+    /// Describes the caller's identity and, for org API keys, the resolved organization.
+    /// </summary>
+    [Serializable]
+    public class AuthContext
+    {
+        /// <summary>"org_api_key", "user_api_key", or "user"</summary>
+        public string type;
+        public int? organizationId;
+        public string[] permissions;
+        public int? userId;
+        public string email;
+        public string displayName;
+        public string organizationName;
+    }
 }
