@@ -88,7 +88,7 @@ All requests use API key authentication via `X-API-Key` header (not JWT Bearer t
 
 ## Key Models (Runtime/Models.cs)
 
-- `CreateSessionRequest` — Session creation payload (`gameKey` serialized as `gameTypeConfigKey` via `[JsonProperty]`, region, customVariables dict)
+- `CreateSessionRequest` — Session creation payload (`gameKey` serialized as `gameTypeConfigKey` via `[JsonProperty]`, region, channel, customVariables dict)
 - `GameSession` — Session response (status strings: `"Active"`, `"Pending"`, `"Scheduled"`, `"Not Active"`; serverType: `"Credit"`, `"Subscription"`)
 - `CreditBalance` — Balance with `GetAvailableBalance()` helper (handles frozen subscription credits)
 - `StopSessionResult` — Billing info (totalHours, totalCost)

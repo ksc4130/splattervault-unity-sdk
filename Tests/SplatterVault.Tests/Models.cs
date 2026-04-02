@@ -35,6 +35,7 @@ namespace SplatterVault
         public int? serverSizeId;
         public int? organizationId;
         public int? buildId;
+        public string? channel;
         public Dictionary<string, object>? customVariables;
 
         public void SetRegion(Region region) => this.region = region.ToApiString();
@@ -51,6 +52,7 @@ namespace SplatterVault
 
         public void SetOrganizationId(int orgId) => organizationId = orgId;
         public void SetBuildId(int id) => buildId = id;
+        public void SetChannel(string channelName) => channel = channelName;
 
         public void AddCustomVariable(string flag, object value)
         {

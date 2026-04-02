@@ -52,6 +52,7 @@ namespace SplatterVault
         public int? serverSizeId;         // Optional: server size ID (defaults per game type)
         public int? organizationId;       // Optional: bill to organization credits instead of personal
         public int? buildId;              // Optional: use a specific build
+        public string channel;            // Optional: use the build deployed to this channel (e.g., "stable", "beta")
 
         /// <summary>
         /// Launch argument overrides. Keys are the arg flag (e.g., "-mstRoomMode"),
@@ -98,6 +99,16 @@ namespace SplatterVault
         public void SetBuildId(int id)
         {
             buildId = id;
+        }
+
+        /// <summary>
+        /// Set the build channel name (e.g., "stable", "beta", "dev").
+        /// The server will use the build currently deployed to this channel.
+        /// If omitted, the game's default channel is used.
+        /// </summary>
+        public void SetChannel(string channelName)
+        {
+            channel = channelName;
         }
 
         /// <summary>

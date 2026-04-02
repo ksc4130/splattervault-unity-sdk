@@ -160,6 +160,36 @@ GameSession session = await client.CreateCreditSessionAsync(request);
 Debug.Log($"Session {session.id} created, status: {session.status}");
 ```
 
+### Build Channels
+
+Games can have multiple build channels (e.g., "stable", "beta", "dev"). When creating a session, the server picks which build to use in this order:
+
+1. **Explicit `buildId`** — If you pass a `buildId`, that exact build is used
+2. **Named `channel`** — If you pass a `channel` name, the build deployed to that channel is used
+3. **Default channel** — If neither is provided, the game's default channel build is used
+4. **Legacy fallback** — If no channels are configured, the single active build is used
+
+```csharp
+// Use the default channel (most common — no extra config needed)
+var request = new CreateSessionRequest { gameKey = "your_game_key" };
+
+// Use a specific channel (e.g., beta testing)
+var request = new CreateSessionRequest
+{
+    gameKey = "your_game_key",
+    channel = "beta"
+};
+
+// Use an exact build ID (rare — for pinning to a known-good build)
+var request = new CreateSessionRequest
+{
+    gameKey = "your_game_key",
+    buildId = 42
+};
+```
+
+Most developers should just omit both `channel` and `buildId` — the default channel is managed from the SplatterVault dashboard.
+
 ### Step 5: Monitor Session Status
 
 Sessions go through these states: **Scheduled** -> **Pending** -> **Active** -> **Not Active**
@@ -390,6 +420,7 @@ All methods also accept optional `Action<T> onSuccess` and `Action<string> onErr
 | `serverSizeId` | `int?` | Server size (defaults per game) |
 | `organizationId` | `int?` | Org billing (auto-injected for org keys) |
 | `buildId` | `int?` | Specific game build |
+| `channel` | `string` | Build channel name (e.g., "stable", "beta") |
 | `customVariables` | `Dictionary<string, object>` | Launch argument overrides |
 
 #### GameSession (response)

@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AuthContext` property — exposes the resolved auth context (type, organizationId, permissions, etc.)
 - `CreateSessionAsync(request, serverType)` — unified session creation that routes to credit or subscription endpoint
 - `AuthContext` model class for the `/auth/me` response
+- `CreateSessionRequest.channel` field — select a build channel by name (e.g., "stable", "beta")
+- `SetChannel(string)` helper on `CreateSessionRequest`
+- Build Channels documentation section in README
 
 ### Changed
 - `GetOrgCreditBalanceAsync` now falls back to `/org/credits` for org API keys when org ID is not explicitly set
