@@ -267,6 +267,25 @@ class Program
             await Task.CompletedTask;
         });
 
+        await RunTest("Model — CreateSessionRequest channel field", async () =>
+        {
+            var req = new CreateSessionRequest { gameKey = "sys_test_123" };
+            Assert(req.channel == null, "channel should be null by default");
+
+            req.SetChannel("production");
+            Assert(req.channel == "production", $"channel should be 'production', got '{req.channel}'");
+
+            var json = JsonConvert.SerializeObject(req, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+            Assert(json.Contains("\"channel\":\"production\""), $"channel should serialize in JSON, got: {Truncate(json, 120)}");
+
+            // Without channel set, it should not appear in JSON
+            var req2 = new CreateSessionRequest { gameKey = "sys_test_456" };
+            var json2 = JsonConvert.SerializeObject(req2, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+            Assert(!json2.Contains("channel"), $"channel should not appear when null, got: {Truncate(json2, 120)}");
+
+            await Task.CompletedTask;
+        });
+
         await RunTest("Model — CreditBalance helper methods", async () =>
         {
             var balance = new CreditBalance
@@ -367,13 +386,16 @@ class Program
         {
             region = (config.Region ?? "NYC3"),
             gameKey = config.GameKey ?? "sys_1774636058786_30e0fc4d",
-            friendlyName = config.FriendlyName ?? $"SDK-Test-{DateTime.UtcNow:yyyyMMdd-HHmmss}"
+            friendlyName = config.FriendlyName ?? $"SDK-Test-{DateTime.UtcNow:yyyyMMdd-HHmmss}",
+            channel = config.Channel
         };
 
         Console.WriteLine($"Starting {config.SessionType} session...");
         Console.WriteLine($"  Game Key: {req.gameKey}");
         Console.WriteLine($"  Region:   {req.region}");
         Console.WriteLine($"  Name:     {req.friendlyName}");
+        if (!string.IsNullOrEmpty(req.channel))
+            Console.WriteLine($"  Channel:  {req.channel}");
         Console.WriteLine();
 
         try
@@ -631,6 +653,7 @@ class Program
         Console.WriteLine("  --region <region>         NYC3, LON1, TOR1, etc.");
         Console.WriteLine("  --mode <mode>             XBall, NXL, Deathmatch, etc.");
         Console.WriteLine("  --friendly-name <name>    Session friendly name");
+        Console.WriteLine("  --channel <name>          Build channel (e.g., production, beta, dev)");
     }
 
     // ── Argument parsing ────────────────────────────────────────────
@@ -677,6 +700,9 @@ class Program
                 case "--friendly-name" when i + 1 < args.Length:
                     config.FriendlyName = args[++i];
                     break;
+                case "--channel" when i + 1 < args.Length:
+                    config.Channel = args[++i];
+                    break;
             }
         }
 
@@ -701,6 +727,7 @@ class TestConfig
     public string? GameKey { get; set; }
     public string? Region { get; set; }
     public string? FriendlyName { get; set; }
+    public string? Channel { get; set; }
 }
 
 class SavedSession
