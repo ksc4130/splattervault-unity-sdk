@@ -45,7 +45,6 @@ namespace SplatterVault
         [JsonProperty("gameTypeConfigKey")]
         public string gameKey;
 
-        public bool isPublic = false;
         public string friendlyName;
         public string scheduledStartTime; // ISO 8601 format
         public string scheduledEndTime;   // ISO 8601 format
@@ -155,7 +154,6 @@ namespace SplatterVault
         public string gameType;  // Resolved game type name (read-only from API)
         public string region;
         public string mode;      // Resolved mode (read-only from API)
-        public bool isPublic;
         public string scheduledStartTime;
         public string scheduledEndTime;
         public string serverStart;

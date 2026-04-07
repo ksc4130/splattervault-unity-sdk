@@ -5,6 +5,12 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-04-07
+
+### Breaking
+- Removed session-level `isPublic` from `CreateSessionRequest` and `GameSession`. The backend no longer has a per-session public/private column — games that need the concept declare a boolean launchArgument with `semantic: "public"` that the session creator toggles via `customVariables`. To preserve old behavior, pass `customVariables = { "--public" = "true" }` on create (or use `request.AddCustomVariable("--public", "true")`).
+- Removed `isPublic` from `MSTServerInfo` (populated from the removed session field).
+
 ## [3.1.0] - 2026-04-02
 
 ### Added

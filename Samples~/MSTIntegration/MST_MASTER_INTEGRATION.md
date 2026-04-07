@@ -41,8 +41,7 @@ async void SpawnServer(string roomName)
 {
     var request = new CreateSessionRequest 
     { 
-        friendlyName = roomName,
-        isPublic = true
+        friendlyName = roomName
     };
     request.SetRegion(Region.NYC3);
     request.SetGameType(GameType.PaintballPlayground);
@@ -96,8 +95,7 @@ public class SplatterVaultMSTSpawner : MonoBehaviour
             // Create the SplatterVault session
             var svRequest = new CreateSessionRequest 
             {
-                friendlyName = request.RoomName ?? "Game Server",
-                isPublic = true
+                friendlyName = request.RoomName ?? "Game Server"
             };
             svRequest.SetRegion(region);
             svRequest.SetGameType(GameType.PaintballPlayground);

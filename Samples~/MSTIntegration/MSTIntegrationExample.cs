@@ -123,8 +123,7 @@ public class MSTIntegrationExample : MonoBehaviour
             var request = new CreateSessionRequest
             {
                 gameKey = this.gameKey,
-                friendlyName = gameName,
-                isPublic = true
+                friendlyName = gameName
             };
             request.SetRegion(region);
 
@@ -184,7 +183,7 @@ public class MSTIntegrationExample : MonoBehaviour
                 RoomIp = serverInfo.ipAddress,
                 RoomPort = serverInfo.port,
                 MaxPlayers = maxPlayers,
-                IsPublic = serverInfo.isPublic,
+                IsPublic = true,
                 Properties = serverInfo.ToMSTProperties() // Includes serverCode, region, etc.
             };
 

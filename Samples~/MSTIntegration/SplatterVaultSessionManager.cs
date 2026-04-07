@@ -51,9 +51,6 @@ public class SplatterVaultSessionManager : MonoBehaviour
     [Tooltip("Game port")]
     [SerializeField] private int gamePort = 7777;
     
-    [Tooltip("Make server public")]
-    [SerializeField] private bool isPublic = true;
-
     [Header("Auto Management")]
     [Tooltip("Automatically register with MST")]
     [SerializeField] private bool autoRegisterMST = true;
@@ -201,8 +198,7 @@ public class SplatterVaultSessionManager : MonoBehaviour
             var request = new CreateSessionRequest
             {
                 gameKey = this.gameKey,
-                friendlyName = friendlyName ?? $"Game {DateTime.Now:HH:mm}",
-                isPublic = isPublic
+                friendlyName = friendlyName ?? $"Game {DateTime.Now:HH:mm}"
             };
             request.SetRegion(region);
 
@@ -396,7 +392,7 @@ public class SplatterVaultSessionManager : MonoBehaviour
                 RoomIp = session.ipAddress,
                 RoomPort = session.port,
                 MaxPlayers = maxPlayers,
-                IsPublic = isPublic,
+                IsPublic = true,
                 Properties = new Dictionary<string, string>
                 {
                     { "serverCode", session.code },

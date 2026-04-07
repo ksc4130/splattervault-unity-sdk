@@ -123,8 +123,7 @@ public class SplatterVaultMSTBridge : MonoBehaviour
             var request = new CreateSessionRequest
             {
                 gameKey = this.gameKey,
-                friendlyName = friendlyName ?? $"Game {DateTime.Now:HH:mm}",
-                isPublic = true
+                friendlyName = friendlyName ?? $"Game {DateTime.Now:HH:mm}"
             };
             request.SetRegion(region);
 
@@ -259,7 +258,7 @@ public class SplatterVaultMSTBridge : MonoBehaviour
                 RoomIp = serverInfo.ipAddress,
                 RoomPort = serverInfo.port,
                 MaxPlayers = serverInfo.maxPlayers,
-                IsPublic = serverInfo.isPublic,
+                IsPublic = true,
                 Properties = serverInfo.ToMSTProperties()
             };
             

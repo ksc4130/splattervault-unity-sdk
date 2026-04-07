@@ -18,7 +18,6 @@ public class SimpleSessionManager : MonoBehaviour
     [Tooltip("Game config key from your SplatterVault dashboard")]
     [SerializeField] private string gameKey = "your_game_key_here";
 
-    [SerializeField] private bool isPublic = false;
 
     [Header("Session Info")]
     [SerializeField] private string currentSessionCode;
@@ -70,9 +69,11 @@ public class SimpleSessionManager : MonoBehaviour
             var request = new CreateSessionRequest
             {
                 gameKey = this.gameKey,
-                isPublic = this.isPublic,
                 friendlyName = $"Unity Game - {DateTime.Now:HH:mm}"
             };
+            // If your game declares a launchArgument with semantic: "public",
+            // toggle it via customVariables, e.g.:
+            // request.AddCustomVariable("--public", "true");
             request.SetRegion(this.region);
 
             activeSession = await client.CreateCreditSessionAsync(request);
@@ -112,7 +113,6 @@ public class SimpleSessionManager : MonoBehaviour
             var request = new CreateSessionRequest
             {
                 gameKey = this.gameKey,
-                isPublic = this.isPublic,
                 friendlyName = "Practice Match"
             };
             request.SetRegion(this.region);

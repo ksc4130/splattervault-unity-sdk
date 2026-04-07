@@ -28,7 +28,6 @@ namespace SplatterVault
         [JsonProperty("gameTypeConfigKey")]
         public string? gameKey;
 
-        public bool isPublic = false;
         public string? friendlyName;
         public string? scheduledStartTime;
         public string? scheduledEndTime;
@@ -76,7 +75,6 @@ namespace SplatterVault
         public string? gameType;
         public string? region;
         public string? mode;
-        public bool isPublic;
         public string? scheduledStartTime;
         public string? scheduledEndTime;
         public string? serverStart;

@@ -141,7 +141,6 @@ Arguments with `semantic: "mode"` represent the game mode selection.
 var request = new CreateSessionRequest
 {
     gameKey = "your_game_key",
-    isPublic = false,
     friendlyName = "Practice Match"
 };
 request.SetRegion(Region.NYC3);
@@ -256,7 +255,6 @@ for (int i = 0; i < 4; i++)
     var request = new CreateSessionRequest
     {
         gameKey = "your_game_key",
-        isPublic = true,
         friendlyName = $"Match {i + 1}"
     };
     request.SetScheduledStartTime(matchStart);
@@ -342,7 +340,7 @@ using SplatterVault.MST;
 
 // Create server and wait for it to be ready (polls every 5s, up to 5 min)
 MSTServerInfo serverInfo = await client.CreateAndWaitForMSTServer(
-    new CreateSessionRequest { gameKey = "your_game_key", isPublic = true },
+    new CreateSessionRequest { gameKey = "your_game_key" },
     onProgress: (status) => Debug.Log(status)
 );
 
@@ -413,7 +411,6 @@ All methods also accept optional `Action<T> onSuccess` and `Action<string> onErr
 |-------|------|-------------|
 | `gameKey` | `string` | Game config key (required) |
 | `region` | `string` | Server region (default: "NYC3") |
-| `isPublic` | `bool` | Public visibility (default: false) |
 | `friendlyName` | `string` | Display name |
 | `scheduledStartTime` | `string` | ISO 8601 start time |
 | `scheduledEndTime` | `string` | ISO 8601 auto-stop time |

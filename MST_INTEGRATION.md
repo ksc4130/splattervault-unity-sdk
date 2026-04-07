@@ -108,7 +108,6 @@ private void RegisterWithMST()
         RoomIp = serverInfo.ipAddress,
         RoomPort = serverInfo.port,
         MaxPlayers = serverInfo.maxPlayers,
-        IsPublic = serverInfo.isPublic,
         Properties = serverInfo.ToMSTProperties()
     };
     

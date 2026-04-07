@@ -71,7 +71,6 @@ public class TournamentManager : MonoBehaviour
                 {
                     region = "NYC3",
                     gameKey = "your_game_key_here",
-                    isPublic = true,
                     friendlyName = $"Tournament Match {i + 1}"
                 };
 
@@ -176,7 +175,6 @@ public class TournamentManager : MonoBehaviour
             {
                 region = "NYC3",
                 gameKey = "your_game_key_here",
-                isPublic = true,
                 friendlyName = matchName
             };
 

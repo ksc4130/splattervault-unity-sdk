@@ -24,7 +24,6 @@ namespace SplatterVault.MST
                 maxPlayers = 10, // Configure based on your game
                 gameType = session.gameType,
                 mode = session.mode,
-                isPublic = session.isPublic,
                 region = session.region,
                 status = session.status
             };
@@ -133,7 +132,6 @@ namespace SplatterVault.MST
         public int maxPlayers;
         public string gameType;
         public string mode;
-        public bool isPublic;
         public string region;
         public string status;
 
