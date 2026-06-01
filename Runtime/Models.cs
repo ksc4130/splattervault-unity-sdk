@@ -57,7 +57,9 @@ namespace SplatterVault
         /// Launch argument overrides. Keys are the arg flag (e.g., "-mstRoomMode"),
         /// values are the override value. Use GetConfigurableArgsAsync() to discover
         /// available arguments for a game.
+        /// Transmitted to the API as "environmentVariables".
         /// </summary>
+        [JsonProperty("environmentVariables")]
         public Dictionary<string, object> customVariables;
 
         /// <summary>
@@ -111,7 +113,15 @@ namespace SplatterVault
         }
 
         /// <summary>
-        /// Add a launch argument override
+        /// Add a launch argument override. The flag must exactly match a `flag` value
+        /// in the game's launchArguments schema (e.g. "-mstMasterIp"); flags not in the
+        /// schema have no effect. Non-user-configurable (hidden/infra) flags CAN be
+        /// overridden — use GetConfigurableArgsAsync() only to discover player-facing args.
+        ///
+        /// Values are validated server-side against the schema (number min/max, select
+        /// options, text pattern, required) — except when the request is made with the
+        /// owning game's API key, in which case the owner may pass any value for a
+        /// declared arg (validation is bypassed).
         /// </summary>
         /// <param name="flag">Argument flag (e.g., "-mstRoomMode", "-maxPlayers")</param>
         /// <param name="value">Override value</param>
@@ -446,5 +456,61 @@ namespace SplatterVault
         public string email;
         public string displayName;
         public string organizationName;
+    }
+
+    /// <summary>
+    /// Meta account link status for the authenticated user
+    /// </summary>
+    [Serializable]
+    public class MetaLinkStatus
+    {
+        public bool linked;
+        public string metaUsername;
+        public string orgScopedId;
+    }
+
+    /// <summary>
+    /// Response from POST /auth/meta/login
+    /// </summary>
+    [Serializable]
+    public class MetaLoginResponse
+    {
+        public bool success;
+        public string token;
+        public string refreshToken;
+        public string error;
+        public MetaLoginUser user;
+    }
+
+    /// <summary>
+    /// User info returned in the Meta login response
+    /// </summary>
+    [Serializable]
+    public class MetaLoginUser
+    {
+        public int id;
+        public string email;
+        public string displayName;
+    }
+
+    /// <summary>
+    /// Response from POST /auth/refresh-token
+    /// </summary>
+    [Serializable]
+    public class TokenRefreshResponse
+    {
+        public bool success;
+        public string error;
+        public TokenRefreshData data;
+    }
+
+    /// <summary>
+    /// Nested data object in the token refresh response
+    /// </summary>
+    [Serializable]
+    public class TokenRefreshData
+    {
+        public string token;
+        public string refreshToken;
     }
 }

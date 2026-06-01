@@ -5,6 +5,14 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2026-06-01
+
+### Fixed
+- **Launch-argument overrides never reached the server.** `CreateSessionRequest.customVariables` serialized under the JSON key `customVariables`, but the API only reads `environmentVariables` (the field was renamed server-side). The C# field now carries `[JsonProperty("environmentVariables")]`, so overrides set via `AddCustomVariable` / `SetCustomVariables` are actually applied. No SDK API changes — `customVariables` and its methods keep the same names.
+
+### Notes
+- Override values are validated server-side against the game's launch-arg schema (number min/max, select options, text pattern, required). When a session is created with the **owning game's API key**, the owner may pass any value for a declared arg (server-side validation is bypassed). Flags not declared in the game's `launchArguments` are still ignored.
+
 ## [3.2.0] - 2026-04-07
 
 ### Breaking

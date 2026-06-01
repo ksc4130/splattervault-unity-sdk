@@ -418,7 +418,7 @@ All methods also accept optional `Action<T> onSuccess` and `Action<string> onErr
 | `organizationId` | `int?` | Org billing (auto-injected for org keys) |
 | `buildId` | `int?` | Specific game build |
 | `channel` | `string` | Build channel name (e.g., "stable", "beta") |
-| `customVariables` | `Dictionary<string, object>` | Launch argument overrides |
+| `customVariables` | `Dictionary<string, object>` | Launch argument overrides (sent to the API as `environmentVariables`) |
 
 #### GameSession (response)
 | Field | Type | Description |
