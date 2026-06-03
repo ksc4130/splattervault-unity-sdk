@@ -5,6 +5,12 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-06-02
+
+### Added
+- `CreateSessionRequest.autoDestroyOnProcessExit` (nullable `bool?`) and `SetAutoDestroyOnProcessExit(bool)` setter. When `true`, the session is automatically stopped if the game server process exits (clean or crash). When omitted, the platform falls back to the per-game-type default configured by the game owner. Explicit `false` overrides a `true` game-type default.
+- New session stop reason `AUTO_DESTROYED` (surfaced by the API) — distinguishes auto-destroyed sessions from `GAME_CRASH` / `PROCESS_EXIT`.
+
 ## [3.2.1] - 2026-06-01
 
 ### Fixed
