@@ -63,6 +63,17 @@ namespace SplatterVault
         public Dictionary<string, object> customVariables;
 
         /// <summary>
+        /// When true, the session is automatically stopped if the game server process exits
+        /// (either cleanly with code 0 or via crash). When omitted, the platform falls back to
+        /// the game-type default configured by the game owner. Explicit false overrides a true
+        /// game-type default — set this if you want the session to keep running across game
+        /// process restarts.
+        /// Serializes as "autoDestroyOnProcessExit".
+        /// </summary>
+        [JsonProperty("autoDestroyOnProcessExit", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? autoDestroyOnProcessExit;
+
+        /// <summary>
         /// Set the region using strongly-typed enum
         /// </summary>
         public void SetRegion(Region region)
@@ -110,6 +121,16 @@ namespace SplatterVault
         public void SetChannel(string channelName)
         {
             channel = channelName;
+        }
+
+        /// <summary>
+        /// Configure whether the session should auto-stop when the game process exits.
+        /// Pass true to opt in, false to opt out of the game-type default, or leave unset
+        /// to inherit the game-type default.
+        /// </summary>
+        public void SetAutoDestroyOnProcessExit(bool value)
+        {
+            autoDestroyOnProcessExit = value;
         }
 
         /// <summary>
