@@ -453,13 +453,26 @@ All methods also accept optional `Action<T> onSuccess` and `Action<string> onErr
 ### Regions
 
 ```csharp
+// US East
 Region.NYC1   // New York 1
-Region.NYC3   // New York 3
+Region.NYC3   // New York 3 (default)
+Region.ATL1   // Atlanta
+Region.RIC1   // Richmond
 Region.TOR1   // Toronto
-Region.SFO1   // San Francisco 1
+
+// US West
 Region.SFO2   // San Francisco 2
 Region.SFO3   // San Francisco 3
+
+// Europe
 Region.LON1   // London
+Region.AMS3   // Amsterdam
+Region.FRA1   // Frankfurt
+
+// Asia-Pacific
+Region.SGP1   // Singapore
+Region.BLR1   // Bangalore
+Region.SYD1   // Sydney
 ```
 
 ## Error Handling

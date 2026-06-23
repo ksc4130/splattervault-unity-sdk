@@ -95,7 +95,7 @@ All requests use API key authentication via `X-API-Key` header (not JWT Bearer t
 - `StructuredLaunchArg` — Game config arg definition (types: select, number, text, boolean, hidden)
 - `OrgCreditStats` / `OrgSubscriptionInfo` — Organization billing models
 - `ApiResponse<T>` / `ApiError` — Standard API envelope
-- `Region` enum — NYC1, NYC3, TOR1, SFO1, SFO2, SFO3, LON1
+- `Region` enum — 13 offered regions: NYC1, NYC3, ATL1, RIC1, TOR1, SFO2, SFO3, LON1, AMS3, FRA1, SGP1, BLR1, SYD1
 
 ## Authentication
 

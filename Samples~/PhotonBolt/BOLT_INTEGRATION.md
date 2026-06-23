@@ -167,10 +167,26 @@ Enable **Auto Stop On Empty** in the Inspector and set the timeout. Default is 3
 ## Regions
 
 ```csharp
-Region.NYC3  // New York (US East) — default
-Region.TOR1  // Toronto (Canada)
-Region.SFO1  // San Francisco (US West)
-Region.LON1  // London (Europe)
+// US East
+Region.NYC1  // New York (Jersey City)
+Region.NYC3  // New York (North Bergen) — default
+Region.ATL1  // Atlanta
+Region.RIC1  // Richmond
+Region.TOR1  // Toronto
+
+// US West
+Region.SFO2  // San Francisco (Santa Clara)
+Region.SFO3  // San Francisco (Santa Clara)
+
+// Europe
+Region.LON1  // London
+Region.AMS3  // Amsterdam
+Region.FRA1  // Frankfurt
+
+// Asia-Pacific
+Region.SGP1  // Singapore
+Region.BLR1  // Bangalore
+Region.SYD1  // Sydney
 ```
 
 ---

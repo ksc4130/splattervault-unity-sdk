@@ -5,6 +5,14 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-06-23
+
+### Added
+- `Region` enum now covers all 13 offered regions — added `ATL1` (Atlanta), `RIC1` (Richmond), `AMS3` (Amsterdam), `FRA1` (Frankfurt), `SGP1` (Singapore), `BLR1` (Bangalore), and `SYD1` (Sydney). Previously the enum exposed only 7 regions, so strongly-typed callers could not target most EU/APAC datacenters even though the session API accepts them.
+
+### Breaking
+- Removed the retired `Region.SFO1` value (the SFO1 datacenter is no longer offered). Code referencing `Region.SFO1` will no longer compile — use `Region.SFO2` or `Region.SFO3` instead.
+
 ## [3.3.0] - 2026-06-02
 
 ### Added

@@ -9,13 +9,26 @@ namespace SplatterVault
     /// </summary>
     public enum Region
     {
+        // US East
         NYC1,   // New York 1
         NYC3,   // New York 3
+        ATL1,   // Atlanta
+        RIC1,   // Richmond
         TOR1,   // Toronto
-        SFO1,   // San Francisco 1
+
+        // US West
         SFO2,   // San Francisco 2
         SFO3,   // San Francisco 3
-        LON1    // London
+
+        // Europe
+        LON1,   // London
+        AMS3,   // Amsterdam
+        FRA1,   // Frankfurt
+
+        // Asia-Pacific
+        SGP1,   // Singapore
+        BLR1,   // Bangalore
+        SYD1    // Sydney
     }
 
     /// <summary>
