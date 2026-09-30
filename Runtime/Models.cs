@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Newtonsoft.Json;
 
 namespace SplatterVault
@@ -87,6 +88,18 @@ namespace SplatterVault
         public bool? autoDestroyOnProcessExit;
 
         /// <summary>
+        /// Stop the session automatically after this many minutes with no network connections
+        /// (5–1440). Omit (null) to keep today's behaviour: the session is never idle-stopped.
+        /// The clock starts when the server is ready, so a server nobody joins is stopped after
+        /// this long. Pool-served sessions are returned to their pool. The stopped session reports
+        /// stopReason "IDLE_TIMEOUT" (see <see cref="GameSession.IsIdleTimedOut"/>).
+        /// The range is checked by the server: any other value makes the create call fail with 400.
+        /// Serializes as "idleTimeoutMinutes".
+        /// </summary>
+        [JsonProperty("idleTimeoutMinutes", NullValueHandling = NullValueHandling.Ignore)]
+        public int? idleTimeoutMinutes;
+
+        /// <summary>
         /// Set the region using strongly-typed enum
         /// </summary>
         public void SetRegion(Region region)
@@ -144,6 +157,16 @@ namespace SplatterVault
         public void SetAutoDestroyOnProcessExit(bool value)
         {
             autoDestroyOnProcessExit = value;
+        }
+
+        /// <summary>
+        /// Stop the session automatically after this many minutes with no network connections.
+        /// The server accepts 5 to 1440 and rejects anything else with 400. Set
+        /// <see cref="idleTimeoutMinutes"/> back to null to turn the idle timeout off.
+        /// </summary>
+        public void SetIdleTimeoutMinutes(int minutes)
+        {
+            idleTimeoutMinutes = minutes;
         }
 
         /// <summary>
@@ -215,6 +238,32 @@ namespace SplatterVault
         public object stopReasonDetails;
 
         /// <summary>
+        /// Idle timeout set at creation, in minutes. Null = the session is never idle-stopped.
+        /// </summary>
+        public int? idleTimeoutMinutes;
+
+        /// <summary>
+        /// Start of the current no-connection period (ISO 8601, UTC), as last reported by the
+        /// server. Null while players are connected, before monitoring starts, or when the
+        /// session has no idle timeout. Use <see cref="GetIdleSince"/> for a DateTime.
+        /// </summary>
+        public string idleSince;
+
+        /// <summary>
+        /// When the server last reported connection activity for this session (ISO 8601, UTC).
+        /// Stays null on a session with an idle timeout until monitoring starts; if it stays
+        /// null long after the session is Active, the server is not monitoring it and it will
+        /// not be idle-stopped.
+        /// </summary>
+        public string lastPeerSampleAt;
+
+        /// <summary>
+        /// Last idle-monitor state: "starting", "active", "empty" or "unknown". Null when the
+        /// session is not monitored.
+        /// </summary>
+        public string idleMonitorState;
+
+        /// <summary>
         /// Server size details (populated when API includes the relation)
         /// </summary>
         public ServerSizeInfo serverSize;
@@ -237,11 +286,37 @@ namespace SplatterVault
             return DateTime.Parse(serverStart);
         }
 
+        /// <summary>
+        /// Start of the current no-connection period as a UTC DateTime, or null.
+        /// </summary>
+        public DateTime? GetIdleSince() => ParseUtcTimestamp(idleSince);
+
+        /// <summary>
+        /// When the server last reported connection activity, as a UTC DateTime, or null.
+        /// </summary>
+        public DateTime? GetLastPeerSampleAt() => ParseUtcTimestamp(lastPeerSampleAt);
+
         public bool IsActive() => status == "Active";
         public bool IsPending() => status == "Pending";
         public bool IsScheduled() => status == "Scheduled";
         public bool IsStopped() => status == "Not Active";
+
+        /// <summary>
+        /// True when the session was stopped by its idle timeout (stopReason "IDLE_TIMEOUT").
+        /// </summary>
+        public bool IsIdleTimedOut() => stopReason == "IDLE_TIMEOUT";
+
         public int GetServerPort() => slavePort ?? 8100;
+
+        private static DateTime? ParseUtcTimestamp(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return null;
+            DateTime parsed;
+            if (DateTime.TryParse(value, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out parsed))
+                return parsed;
+            return null;
+        }
     }
 
     /// <summary>

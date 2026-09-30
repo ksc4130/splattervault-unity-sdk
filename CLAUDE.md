@@ -34,7 +34,7 @@ Tests/
 ## Package Info
 
 - Package name: `com.splattervault.sdk`
-- Version: 3.0.0
+- Version: 3.5.0
 - Unity requirement: 2019.4+
 - Runtime dependency: Newtonsoft.Json (included with Unity 2020+)
 - Install via Unity Package Manager: `https://github.com/ksc4130/splattervault-unity-sdk.git`

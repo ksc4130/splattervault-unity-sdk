@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Newtonsoft.Json;
 
 namespace SplatterVault
@@ -37,6 +38,9 @@ namespace SplatterVault
         public string? channel;
         public Dictionary<string, object>? customVariables;
 
+        [JsonProperty("idleTimeoutMinutes", NullValueHandling = NullValueHandling.Ignore)]
+        public int? idleTimeoutMinutes;
+
         public void SetRegion(Region region) => this.region = region.ToApiString();
 
         public void SetScheduledStartTime(DateTime dateTime)
@@ -52,6 +56,7 @@ namespace SplatterVault
         public void SetOrganizationId(int orgId) => organizationId = orgId;
         public void SetBuildId(int id) => buildId = id;
         public void SetChannel(string channelName) => channel = channelName;
+        public void SetIdleTimeoutMinutes(int minutes) => idleTimeoutMinutes = minutes;
 
         public void AddCustomVariable(string flag, object value)
         {
@@ -90,6 +95,10 @@ namespace SplatterVault
         public int? organizationId;
         public string? stopReason;
         public object? stopReasonDetails;
+        public int? idleTimeoutMinutes;
+        public string? idleSince;
+        public string? lastPeerSampleAt;
+        public string? idleMonitorState;
         public ServerSizeInfo? serverSize;
 
         public DateTime? GetScheduledStartTime() =>
@@ -98,12 +107,24 @@ namespace SplatterVault
             string.IsNullOrEmpty(scheduledEndTime) ? null : DateTime.Parse(scheduledEndTime);
         public DateTime? GetServerStartTime() =>
             string.IsNullOrEmpty(serverStart) ? null : DateTime.Parse(serverStart);
+        public DateTime? GetIdleSince() => ParseUtcTimestamp(idleSince);
+        public DateTime? GetLastPeerSampleAt() => ParseUtcTimestamp(lastPeerSampleAt);
 
         public bool IsActive() => status == "Active";
         public bool IsPending() => status == "Pending";
         public bool IsScheduled() => status == "Scheduled";
         public bool IsStopped() => status == "Not Active";
+        public bool IsIdleTimedOut() => stopReason == "IDLE_TIMEOUT";
         public int GetServerPort() => slavePort ?? 8100;
+
+        private static DateTime? ParseUtcTimestamp(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return null;
+            return DateTime.TryParse(value, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
+                ? parsed
+                : null;
+        }
     }
 
     [Serializable]
@@ -275,5 +296,17 @@ namespace SplatterVault
     {
         public string? message;
         public GameSession? session;
+    }
+
+    [Serializable]
+    public class AuthContext
+    {
+        public string? type;
+        public int? organizationId;
+        public string[]? permissions;
+        public int? userId;
+        public string? email;
+        public string? displayName;
+        public string? organizationName;
     }
 }

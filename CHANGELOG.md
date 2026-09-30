@@ -5,6 +5,20 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-09-29
+
+### Added
+- `CreateSessionRequest.idleTimeoutMinutes` (nullable `int?`) and `SetIdleTimeoutMinutes(int)`. The platform stops the session once nobody has been connected for that many minutes (5–1440; the server rejects other values with 400). The clock starts when the server is ready, so a server nobody joins is stopped after that long. Pool-served sessions are returned to their pool. When omitted, nothing changes: the session is never idle-stopped. Serializes as `idleTimeoutMinutes` and is left out of the request when null.
+- `GameSession` idle-monitoring fields: `idleTimeoutMinutes`, `idleMonitorState` (`starting` / `active` / `empty` / `unknown`), `idleSince` and `lastPeerSampleAt`, with `GetIdleSince()` and `GetLastPeerSampleAt()` (UTC `DateTime?`, culture-independent parsing).
+- `GameSession.IsIdleTimedOut()`: true when `stopReason` is `"IDLE_TIMEOUT"`, the new stop reason for idle stops. Status strings are unchanged; an idle-stopped session is `"Not Active"`.
+
+### Changed (server)
+- `CreateSubscriptionSessionAsync` with an organization API key (`sv_org_...`) now fails with a 400 error ("Organization API keys create sessions with credits: use POST /rest/credits/sessions…") instead of an unexplained 403. It never succeeded with an org key: an organization's subscription grants monthly credits, so use `CreateCreditSessionAsync`. Personal keys are unaffected.
+
+### Notes
+- Requires server support. An older API ignores the field and the create response has `idleTimeoutMinutes == null`, so check it if you rely on the timeout.
+- See the README "Idle Timeout" section for what counts as a connection and the known limitations (private-network clients, relay-only networking, server-browser queries).
+
 ## [3.4.0] - 2026-06-23
 
 ### Added

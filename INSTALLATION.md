@@ -25,7 +25,7 @@ YourUnityProject/
 2. Go to Window → Package Manager
 3. Click the `+` button
 4. Select "Add package from git URL"
-5. Enter: `https://github.com/your-org/splattervault-unity-sdk.git`
+5. Enter: `https://github.com/ksc4130/splattervault-unity-sdk.git#v3.5.0`
 
 ## Verification
 

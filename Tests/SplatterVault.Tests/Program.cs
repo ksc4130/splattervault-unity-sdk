@@ -14,6 +14,7 @@ using SplatterVault;
 ///   dotnet run -- --api-key KEY --start-session       Start a session, save ID to disk
 ///   dotnet run -- --api-key KEY --session-status      Check saved session status
 ///   dotnet run -- --api-key KEY --stop-session        Stop the saved session
+///   dotnet run -- --models-only                       Run only the offline model tests (no API key, no network)
 ///
 /// The API key can be personal (sv_...) or org (sv_org_...).
 /// Org keys auto-detect and route to org endpoints.
@@ -28,9 +29,26 @@ class Program
     static readonly string SessionFilePath = Path.Combine(
         AppContext.BaseDirectory, ".active-session.json");
 
+    // Same settings as SplatterVaultClient uses on the wire.
+    static readonly JsonSerializerSettings WireSettings = new()
+    {
+        NullValueHandling = NullValueHandling.Ignore,
+        FloatParseHandling = FloatParseHandling.Double
+    };
+
     static async Task Main(string[] args)
     {
         var config = ParseArgs(args);
+
+        // ── Offline model tests only (no API key, no network) ──────
+        if (config.ModelsOnly)
+        {
+            Console.WriteLine("SplatterVault SDK model tests (offline)");
+            Console.WriteLine();
+            var modelsSw = Stopwatch.StartNew();
+            await RunModelTests();
+            PrintSummaryAndExit(modelsSw);
+        }
 
         if (string.IsNullOrEmpty(config.ApiKey))
         {
@@ -240,6 +258,15 @@ class Program
         });
 
         // ── Model helper tests (no API calls) ──────────────────────
+        await RunModelTests();
+
+        PrintSummaryAndExit(sw);
+    }
+
+    // ── Model helper tests (no API calls) ───────────────────────────
+
+    static async Task RunModelTests()
+    {
         await RunTest("Model — CreateSessionRequest helpers + JSON serialization", async () =>
         {
             var req = new CreateSessionRequest();
@@ -325,6 +352,111 @@ class Program
             await Task.CompletedTask;
         });
 
+        await RunTest("Model — idleTimeoutMinutes is omitted from the JSON when unset", async () =>
+        {
+            var req = new CreateSessionRequest { gameKey = "sys_test_idle" };
+            Assert(req.idleTimeoutMinutes == null, "idleTimeoutMinutes should be null by default");
+
+            var json = JsonConvert.SerializeObject(req, WireSettings);
+            Assert(!json.Contains("idleTimeoutMinutes"), $"unset idleTimeoutMinutes must not be sent, got: {Truncate(json, 160)}");
+
+            // The property-level NullValueHandling keeps it out even with serializer settings that include nulls,
+            // so an unset value can never reach the API as an explicit null.
+            var jsonDefault = JsonConvert.SerializeObject(req);
+            Assert(!jsonDefault.Contains("idleTimeoutMinutes"), $"unset idleTimeoutMinutes must not be sent with default settings, got: {Truncate(jsonDefault, 200)}");
+
+            await Task.CompletedTask;
+        });
+
+        await RunTest("Model — SetIdleTimeoutMinutes(15) serializes as \"idleTimeoutMinutes\":15", async () =>
+        {
+            var req = new CreateSessionRequest { gameKey = "sys_test_idle" };
+            req.SetIdleTimeoutMinutes(15);
+            Assert(req.idleTimeoutMinutes == 15, $"idleTimeoutMinutes should be 15, got {req.idleTimeoutMinutes}");
+
+            var json = JsonConvert.SerializeObject(req, WireSettings);
+            Assert(json.Contains("\"idleTimeoutMinutes\":15"), $"expected \"idleTimeoutMinutes\":15, got: {Truncate(json, 160)}");
+
+            // No client-side bounds: the API owns the 5–1440 rule and answers 400 for anything else.
+            req.SetIdleTimeoutMinutes(1);
+            var json1 = JsonConvert.SerializeObject(req, WireSettings);
+            Assert(json1.Contains("\"idleTimeoutMinutes\":1"), $"out-of-range values are sent unchanged for the API to reject, got: {Truncate(json1, 160)}");
+
+            // Clearing the field restores today's behaviour (key absent).
+            req.idleTimeoutMinutes = null;
+            var jsonCleared = JsonConvert.SerializeObject(req, WireSettings);
+            Assert(!jsonCleared.Contains("idleTimeoutMinutes"), $"cleared idleTimeoutMinutes must not be sent, got: {Truncate(jsonCleared, 160)}");
+
+            await Task.CompletedTask;
+        });
+
+        await RunTest("Model — GameSession idle fields deserialize and IsIdleTimedOut()", async () =>
+        {
+            const string json = @"{
+                ""id"": 4242,
+                ""status"": ""Not Active"",
+                ""serverType"": ""Credit"",
+                ""serverStart"": ""2026-09-29T11:40:00.000Z"",
+                ""idleTimeoutMinutes"": 15,
+                ""idleSince"": ""2026-09-29T12:00:00.000Z"",
+                ""lastPeerSampleAt"": ""2026-09-29T12:15:30.000Z"",
+                ""idleMonitorState"": ""empty"",
+                ""stopReason"": ""IDLE_TIMEOUT"",
+                ""stopReasonDetails"": { ""triggeredBy"": ""idle_timeout"", ""idleTimeoutMinutes"": 15, ""emptyForSeconds"": 930 }
+            }";
+
+            var session = JsonConvert.DeserializeObject<GameSession>(json, WireSettings);
+            Assert(session != null, "session should deserialize");
+            Assert(session!.idleTimeoutMinutes == 15, $"idleTimeoutMinutes should be 15, got {session.idleTimeoutMinutes}");
+            Assert(session.idleMonitorState == "empty", $"idleMonitorState should be 'empty', got '{session.idleMonitorState}'");
+            Assert(!string.IsNullOrEmpty(session.idleSince), "idleSince should be populated");
+            Assert(!string.IsNullOrEmpty(session.lastPeerSampleAt), "lastPeerSampleAt should be populated");
+            Assert(session.IsIdleTimedOut(), "IsIdleTimedOut() should be true for stopReason IDLE_TIMEOUT");
+            Assert(session.IsStopped(), "an idle-stopped session is 'Not Active'");
+
+            var idleSince = session.GetIdleSince();
+            var expectedIdleSince = new DateTime(2026, 9, 29, 12, 0, 0, DateTimeKind.Utc);
+            Assert(idleSince.HasValue, "GetIdleSince() should return a value");
+            Assert(idleSince!.Value.Kind == DateTimeKind.Utc, $"GetIdleSince() should be UTC, got {idleSince.Value.Kind}");
+            Assert(idleSince.Value == expectedIdleSince, $"GetIdleSince() should be {expectedIdleSince:o}, got {idleSince.Value:o}");
+
+            var lastSample = session.GetLastPeerSampleAt();
+            var expectedLastSample = new DateTime(2026, 9, 29, 12, 15, 30, DateTimeKind.Utc);
+            Assert(lastSample.HasValue && lastSample.Value == expectedLastSample,
+                $"GetLastPeerSampleAt() should be {expectedLastSample:o}, got {(lastSample.HasValue ? lastSample.Value.ToString("o") : "null")}");
+
+            await Task.CompletedTask;
+        });
+
+        await RunTest("Model — GameSession without idle timeout (today's behaviour)", async () =>
+        {
+            // Explicit nulls, as the API sends for sessions created without the field.
+            const string jsonNulls = @"{ ""id"": 1, ""status"": ""Active"", ""idleTimeoutMinutes"": null,
+                ""idleSince"": null, ""lastPeerSampleAt"": null, ""idleMonitorState"": null, ""stopReason"": null }";
+            var s1 = JsonConvert.DeserializeObject<GameSession>(jsonNulls, WireSettings)!;
+            Assert(s1.idleTimeoutMinutes == null, "idleTimeoutMinutes should be null");
+            Assert(s1.idleMonitorState == null, "idleMonitorState should be null");
+            Assert(s1.GetIdleSince() == null, "GetIdleSince() should be null");
+            Assert(s1.GetLastPeerSampleAt() == null, "GetLastPeerSampleAt() should be null");
+            Assert(!s1.IsIdleTimedOut(), "IsIdleTimedOut() should be false without a stop reason");
+
+            // Fields absent entirely (an API that predates idle timeout).
+            var s2 = JsonConvert.DeserializeObject<GameSession>(@"{ ""id"": 2, ""status"": ""Not Active"", ""stopReason"": ""AUTO_DESTROYED"" }", WireSettings)!;
+            Assert(s2.idleTimeoutMinutes == null, "idleTimeoutMinutes should be null when absent");
+            Assert(s2.GetIdleSince() == null, "GetIdleSince() should be null when absent");
+            Assert(!s2.IsIdleTimedOut(), "IsIdleTimedOut() should be false for AUTO_DESTROYED");
+
+            // Garbage timestamps never throw.
+            var s3 = new GameSession { idleSince = "not-a-date", lastPeerSampleAt = "" };
+            Assert(s3.GetIdleSince() == null, "an unparseable idleSince should give null");
+            Assert(s3.GetLastPeerSampleAt() == null, "an empty lastPeerSampleAt should give null");
+
+            await Task.CompletedTask;
+        });
+    }
+
+    static void PrintSummaryAndExit(Stopwatch sw)
+    {
         // ── Summary ─────────────────────────────────────────────────
         sw.Stop();
         Console.WriteLine();
@@ -648,6 +780,7 @@ class Program
         Console.WriteLine("  --api-key <key>           API key (sv_... or sv_org_...)");
         Console.WriteLine("  --org-id <id>             Organization ID for org-scoped tests");
         Console.WriteLine("  --skip-destructive        Skip session create/stop in test suite");
+        Console.WriteLine("  --models-only             Run only the offline model tests (no API key needed)");
         Console.WriteLine("  --session-type <type>     credit or subscription (default: credit)");
         Console.WriteLine("  --game-key <key>          Game config key (e.g., sys_1774636058786_30e0fc4d)");
         Console.WriteLine("  --region <region>         NYC3, LON1, TOR1, etc.");
@@ -677,6 +810,9 @@ class Program
                     break;
                 case "--skip-destructive":
                     config.SkipDestructive = true;
+                    break;
+                case "--models-only":
+                    config.ModelsOnly = true;
                     break;
                 case "--start-session":
                     config.StartSession = true;
@@ -716,6 +852,7 @@ class TestConfig
     public string? ApiKey { get; set; }
     public int? OrgId { get; set; }
     public bool SkipDestructive { get; set; }
+    public bool ModelsOnly { get; set; }
 
     // Session management modes
     public bool StartSession { get; set; }

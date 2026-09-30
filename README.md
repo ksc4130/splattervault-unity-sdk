@@ -17,7 +17,7 @@ Or add directly to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.splattervault.sdk": "https://github.com/ksc4130/splattervault-unity-sdk.git#v3.0.0"
+    "com.splattervault.sdk": "https://github.com/ksc4130/splattervault-unity-sdk.git#v3.5.0"
   }
 }
 ```
@@ -80,7 +80,7 @@ Debug.Log($"Cost: {result.totalCost} credits ({result.totalHours} hours)");
 1. Sign up at [splattervault.com](https://splattervault.com)
 2. Go to your dashboard and generate an API key
    - **Personal key** (`sv_...`): bills to your personal credits
-   - **Organization key** (`sv_org_...`): bills to your org's credits
+   - **Organization key** (`sv_org_...`): bills to your org's credits. Create sessions with `CreateCreditSessionAsync`; subscription sessions need a personal key
 3. Find your **game key** in the game configuration section (e.g., `sys_1774636058786_30e0fc4d`)
 
 ### Step 2: Initialize the Client
@@ -152,6 +152,9 @@ request.AddCustomVariable("-maxPlayers", "10");
 // Set auto-stop time (optional)
 request.SetScheduledEndTime(DateTime.UtcNow.AddHours(2));
 
+// Stop automatically after 15 minutes with nobody connected (optional, see "Idle Timeout")
+request.SetIdleTimeoutMinutes(15);
+
 // Create with credits or subscription
 GameSession session = await client.CreateCreditSessionAsync(request);
 // or: await client.CreateSubscriptionSessionAsync(request);
@@ -188,6 +191,45 @@ var request = new CreateSessionRequest
 ```
 
 Most developers should just omit both `channel` and `buildId` — the default channel is managed from the SplatterVault dashboard.
+
+### Idle Timeout
+
+Set `idleTimeoutMinutes` to have the platform stop the session once nobody has been connected to it for that many minutes. Leave it unset (null) and the session behaves exactly as before: it is never stopped for being idle.
+
+```csharp
+var request = new CreateSessionRequest { gameKey = "your_game_key" };
+request.SetIdleTimeoutMinutes(15);   // 5 to 1440 minutes
+
+GameSession session = await client.CreateCreditSessionAsync(request);
+if (session.idleTimeoutMinutes == null)
+    Debug.LogWarning("This server does not support idle timeout; the session will not idle-stop.");
+```
+
+**How it works**
+- **Range:** 5 to 1440 minutes (24 hours), whole minutes. The server checks the range; any other value makes the create call throw with a 400 error. Omit the field to turn the feature off.
+- **What counts as a connection:** any public IP address that holds an established TCP connection to a port the game server process is listening on, or sends it at least 2 UDP packets within a 10-second window during a check. Players, spectators and admin tools all count. The server checks about every 30 seconds. For a game whose connected clients go quiet for long stretches (for example a lobby with slow keepalives), ask the game owner to set `processConfig.idleDetection.minPacketsPerSource` to 1.
+- **When the clock starts:** when the game server is ready (the game's ready signal, or 2 minutes after launch for games without one). The clock runs even if nobody ever joins, so a server nobody joins is stopped about `idleTimeoutMinutes` after it becomes ready. Any connection, or any check that fails, restarts the clock.
+- **The stop:** the session ends as if you had stopped it: status `"Not Active"`, `stopReason` `"IDLE_TIMEOUT"` (check with `session.IsIdleTimedOut()`). Credit sessions are billed for the time the server ran, idle minutes included.
+- **Pool-served sessions** are returned to their server pool rather than destroyed; the pool's own settings decide what happens to the server.
+- **Other auto-stops still apply.** `scheduledEndTime`, `autoDestroyOnProcessExit` and credit limits work as before; whichever fires first ends the session.
+- **Scheduled sessions:** the timeout applies once the scheduled server has started and is ready.
+
+**Stopping an idle-stopped session.** `StopSessionAsync` (and the credit/subscription variants) on a session that already idle-stopped throws with a 400 error, "Can only stop active sessions". Refresh the session and check `IsStopped()` first if your code may race the idle stop.
+
+**Monitoring fields** on `GameSession` (all null when the session has no idle timeout):
+
+| Field | Meaning |
+|-------|---------|
+| `idleTimeoutMinutes` | The timeout set at creation. Null if you did not set one, or the server does not support idle timeout |
+| `idleMonitorState` | `"starting"` (not ready yet), `"active"` (someone connected), `"empty"` (nobody connected), `"unknown"` (could not check; treated like a connection, so the clock restarts) |
+| `idleSince` | When the current empty period began (UTC, ISO 8601). `GetIdleSince()` returns a UTC `DateTime` |
+| `lastPeerSampleAt` | When the server last checked connections. `GetLastPeerSampleAt()` returns a UTC `DateTime`. If it stays null well after the session is Active, the server is not monitoring this session and it will not idle-stop |
+
+**Limitations**
+- Clients on private addresses (same LAN or VPC as the server) are not counted, so a server used only from a private network looks empty. This mostly affects local test setups.
+- Relay traffic counts only when it arrives on a port the game server listens on. If your server reaches a relay service through an outbound connection (TCP/WebSocket, or a connected UDP socket), players on the relay are not seen: a server that listens on no ports reports `"unknown"` and is never idle-stopped, but a server that also listens on any other port (a query or admin port, for example) looks empty and **will be idle-stopped with players connected**. Do not set `idleTimeoutMinutes` for such games.
+- Server-browser queries and relay keep-alives on the game port count as connections, so a publicly listed server may never look idle.
+- A player who joins in the last half-minute before the stop may be disconnected.
 
 ### Step 5: Monitor Session Status
 
@@ -386,7 +428,7 @@ new SplatterVaultClient(string apiKey, string baseUrl)
 | `CreateSessionAsync(request, serverType)` | `GameSession` | Create session (routes by serverType, default "Credit") |
 | `GetConfigurableArgsAsync(gameKey)` | `List<StructuredLaunchArg>` | Get available launch arguments for a game |
 | `CreateCreditSessionAsync(request)` | `GameSession` | Create credit-billed session |
-| `CreateSubscriptionSessionAsync(request)` | `GameSession` | Create subscription-billed session |
+| `CreateSubscriptionSessionAsync(request)` | `GameSession` | Create subscription-billed session (personal keys only; org keys get 400) |
 | `GetSessionAsync(sessionId)` | `GameSession` | Get session details |
 | `GetMySessionsAsync()` | `List<GameSession>` | List your sessions |
 | `StopCreditSessionAsync(sessionId)` | `StopSessionResult` | Stop credit session (returns billing) |
@@ -419,6 +461,10 @@ All methods also accept optional `Action<T> onSuccess` and `Action<string> onErr
 | `buildId` | `int?` | Specific game build |
 | `channel` | `string` | Build channel name (e.g., "stable", "beta") |
 | `customVariables` | `Dictionary<string, object>` | Launch argument overrides (sent to the API as `environmentVariables`) |
+| `autoDestroyOnProcessExit` | `bool?` | Stop the session when the game process exits. Null = the game's default |
+| `idleTimeoutMinutes` | `int?` | Stop the session after this many minutes with no connections (5–1440). Null = never (see [Idle Timeout](#idle-timeout)) |
+
+**Setters:** `SetRegion()`, `SetScheduledStartTime()`, `SetScheduledEndTime()`, `SetOrganizationId()`, `SetBuildId()`, `SetChannel()`, `SetAutoDestroyOnProcessExit()`, `SetIdleTimeoutMinutes()`, `AddCustomVariable()`, `SetCustomVariables()`, `ClearCustomVariables()`
 
 #### GameSession (response)
 | Field | Type | Description |
@@ -435,8 +481,13 @@ All methods also accept optional `Action<T> onSuccess` and `Action<string> onErr
 | `serverSize` | `ServerSizeInfo` | Size details with creditsPerMinute |
 | `friendlyName` | `string` | Display name |
 | `organizationId` | `int?` | Owning organization |
+| `stopReason` | `string` | Why the session ended, e.g. `"IDLE_TIMEOUT"`, `"AUTO_DESTROYED"`. Null while running |
+| `idleTimeoutMinutes` | `int?` | Idle timeout set at creation (null = none) |
+| `idleMonitorState` | `string` | `starting`, `active`, `empty` or `unknown` (null = not monitored) |
+| `idleSince` | `string` | Start of the current no-connection period (ISO 8601, UTC) |
+| `lastPeerSampleAt` | `string` | Last connection check (ISO 8601, UTC) |
 
-**Helpers:** `IsActive()`, `IsPending()`, `IsScheduled()`, `IsStopped()`, `GetServerPort()`, `GetScheduledStartTime()`, `GetScheduledEndTime()`
+**Helpers:** `IsActive()`, `IsPending()`, `IsScheduled()`, `IsStopped()`, `IsIdleTimedOut()`, `GetServerPort()`, `GetScheduledStartTime()`, `GetScheduledEndTime()`, `GetServerStartTime()`, `GetIdleSince()`, `GetLastPeerSampleAt()`
 
 #### StructuredLaunchArg
 | Field | Type | Description |
@@ -501,6 +552,7 @@ await client.CreateCreditSessionAsync(request,
 **Common errors:**
 | Code | Meaning |
 |------|---------|
+| 400 | Invalid request, e.g. `idleTimeoutMinutes` outside 5–1440, stopping a session that has already stopped, or creating a subscription session with an org key |
 | 401 | Invalid or expired API key |
 | 403 | Insufficient credits or permissions |
 | 404 | Session or game config not found |
